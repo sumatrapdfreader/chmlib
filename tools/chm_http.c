@@ -43,6 +43,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 /* threading includes */
 #include <pthread.h>
@@ -76,7 +77,7 @@ int main(int c, char **v)
 #else
     int optindex = 0;
 
-    struct option longopts[] = 
+    struct option longopts[] =
     {
         { "port", required_argument, 0, 'p' },
         { "bind", required_argument, 0, 'b' },
@@ -84,20 +85,20 @@ int main(int c, char **v)
         { 0, 0, 0, 0 }
     };
 
-    while (1) 
+    while (1)
     {
         int o;
         o = getopt_long (c, v, "n:b:h", longopts, &optindex);
-        if (o < 0) 
+        if (o < 0)
         {
             break;
         }
 
-        switch (o) 
+        switch (o)
         {
             case 'p':
                 config_port = atoi (optarg);
-                if (config_port <= 0) 
+                if (config_port <= 0)
                 {
                     fprintf(stderr, "bad port number (%s)\n", optarg);
                     exit(1);
@@ -148,7 +149,7 @@ static void chmhttp_server(const char *filename)
     struct chmHttpServer        server;
     struct chmHttpSlave        *slave;
     struct sockaddr_in          bindAddr;
-    int                         addrLen;
+    socklen_t                   addrLen;
     pthread_t                   tid;
     int                         one = 1;
 
@@ -166,13 +167,13 @@ static void chmhttp_server(const char *filename)
     bindAddr.sin_port = htons(config_port);
     bindAddr.sin_addr.s_addr = inet_addr(config_bind);
 
-    if (setsockopt (server.socket, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one))) 
+    if (setsockopt (server.socket, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)))
     {
         perror ("setsockopt");
         exit(3);
     }
 
-    if (bind(server.socket, 
+    if (bind(server.socket,
              (struct sockaddr *)&bindAddr,
              sizeof(struct sockaddr_in)) < 0)
     {
@@ -257,7 +258,7 @@ static const char *lookup_mime(const char *ext)
 }
 
 
-static int _print_ui_index(struct chmFile *h, struct chmUnitInfo *ui, 
+static int _print_ui_index(struct chmFile *h, struct chmUnitInfo *ui,
                            void *context)
 {
     FILE *fout = (FILE*) context;
@@ -272,7 +273,7 @@ static int _print_ui_index(struct chmFile *h, struct chmUnitInfo *ui,
 
 static void deliver_index(FILE *fout, struct chmFile *file)
 {
-    fprintf(fout, 
+    fprintf(fout,
             "HTTP/1.1 200 OK\r\n"
             "Connection: close\r\n"
          /* "Content-Length: 1000000\r\n" */

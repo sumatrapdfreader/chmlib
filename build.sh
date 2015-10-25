@@ -19,10 +19,27 @@ CC=clang
 CFLAGS="-g -fsanitize=address -O3 -Isrc"
 CHM_SRCS="src/chm_lib.c src/lzx.c"
 
-OUT=obj/clang/rel
-mkdir -p $OUT
-$CC -o $OUT/test_chmLib $CFLAGS $CHM_SRCS tools/test_chmLib.c
-$CC -o $OUT/extract_chmLib $CFLAGS $CHM_SRCS tools/extract_chmLib.c
-$CC -o $OUT/enumdir_chmLib $CFLAGS $CHM_SRCS tools/enumdir_chmLib.c
-$CC -o $OUT/enum_chmLib $CFLAGS $CHM_SRCS tools/enum_chmLib.c
-$CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
+clang_rel()
+{
+  OUT=obj/clang/rel
+  mkdir -p $OUT
+  $CC -o $OUT/test_chmLib $CFLAGS $CHM_SRCS tools/test_chmLib.c
+  $CC -o $OUT/extract_chmLib $CFLAGS $CHM_SRCS tools/extract_chmLib.c
+  $CC -o $OUT/enumdir_chmLib $CFLAGS $CHM_SRCS tools/enumdir_chmLib.c
+  $CC -o $OUT/enum_chmLib $CFLAGS $CHM_SRCS tools/enum_chmLib.c
+  $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
+}
+
+clang_dbg()
+{
+  CFLAGS="-g -fsanitize=address -O0 -Isrc"
+  OUT=obj/clang/dbg
+  mkdir -p $OUT
+  $CC -o $OUT/test_chmLib $CFLAGS $CHM_SRCS tools/test_chmLib.c
+  $CC -o $OUT/extract_chmLib $CFLAGS $CHM_SRCS tools/extract_chmLib.c
+  $CC -o $OUT/enumdir_chmLib $CFLAGS $CHM_SRCS tools/enumdir_chmLib.c
+  $CC -o $OUT/enum_chmLib $CFLAGS $CHM_SRCS tools/enum_chmLib.c
+  $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
+}
+
+clang_rel
