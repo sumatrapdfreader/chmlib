@@ -215,14 +215,14 @@ struct mime_mapping {
 };
 
 static struct mime_mapping mime_types[] = {{".htm", "text/html"},
-                                    {".html", "text/html"},
-                                    {".css", "text/css"},
-                                    {".gif", "image/gif"},
-                                    {".jpg", "image/jpeg"},
-                                    {".jpeg", "image/jpeg"},
-                                    {".jpe", "image/jpeg"},
-                                    {".bmp", "image/bitmap"},
-                                    {".png", "image/png"}};
+                                           {".html", "text/html"},
+                                           {".css", "text/css"},
+                                           {".gif", "image/gif"},
+                                           {".jpg", "image/jpeg"},
+                                           {".jpeg", "image/jpeg"},
+                                           {".jpe", "image/jpeg"},
+                                           {".bmp", "image/bitmap"},
+                                           {".png", "image/png"}};
 
 static const char* lookup_mime(const char* ext) {
     int i;
@@ -237,8 +237,8 @@ static const char* lookup_mime(const char* ext) {
 }
 
 static int _print_ui_index(struct chmFile* h, struct chmUnitInfo* ui, void* context) {
-  UNUSED(h);
-  UNUSED(context);
+    UNUSED(h);
+    UNUSED(context);
     FILE* fout = (FILE*)context;
     fprintf(fout,
             "<tr>"

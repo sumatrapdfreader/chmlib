@@ -1288,7 +1288,7 @@ static int64_t _chm_decompress_region(struct chmFile* h, uint8_t* buf, uint64_t 
 
 /* retrieve (part of) an object */
 int64_t chm_retrieve_object(struct chmFile* h, struct chmUnitInfo* ui, unsigned char* buf,
-                              uint64_t addr, int64_t len) {
+                            uint64_t addr, int64_t len) {
     /* must be valid file handle */
     if (h == NULL)
         return (int64_t)0;

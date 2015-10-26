@@ -93,7 +93,7 @@ int chm_resolve_object(struct chmFile* h, const char* objPath, struct chmUnitInf
 
 /* retrieve part of an object from the archive */
 int64_t chm_retrieve_object(struct chmFile* h, struct chmUnitInfo* ui, unsigned char* buf,
-                              uint64_t addr, int64_t len);
+                            uint64_t addr, int64_t len);
 
 /* enumerate the objects in the .chm archive */
 typedef int (*CHM_ENUMERATOR)(struct chmFile* h, struct chmUnitInfo* ui, void* context);
