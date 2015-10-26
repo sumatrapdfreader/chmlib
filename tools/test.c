@@ -48,18 +48,18 @@ static int needs_csv_escaping(const char* s) {
 }
 
 static char hex_char(int n) {
-  static const char *s = "0123456789ABCDEF";
-  return s[n];
+    static const char* s = "0123456789ABCDEF";
+    return s[n];
 }
 
-static void sha1_to_hex(uint8_t *sha1, char *sha1Hex) {
-  for (int i = 0; i < 20; i++) {
-    uint8_t c = sha1[i];
-    int n = (c >> 4) & 0xf;
-    sha1Hex[i*2] = hex_char(n);
-    n = c & 0xf;
-    sha1Hex[(i*2)+1] = hex_char(n);
-  }
+static void sha1_to_hex(uint8_t* sha1, char* sha1Hex) {
+    for (int i = 0; i < 20; i++) {
+        uint8_t c = sha1[i];
+        int n = (c >> 4) & 0xf;
+        sha1Hex[i * 2] = hex_char(n);
+        n = c & 0xf;
+        sha1Hex[(i * 2) + 1] = hex_char(n);
+    }
 }
 
 static int enum_cb(struct chmFile* h, struct chmUnitInfo* ui, void* ctx) {
@@ -80,16 +80,15 @@ static int enum_cb(struct chmFile* h, struct chmUnitInfo* ui, void* ctx) {
     else if (isFile)
         strcat(buf, "file");
 
-
     if (ui->length > 0) {
-      uint8_t* d = extract_file(h, ui);
-      if (d != NULL) {
-        int err = sha1_process_all(d, ui->length, sha1);
-        free(d);
-        if (err != CRYPT_OK) {
-          return CHM_ENUMERATOR_FAILURE;
+        uint8_t* d = extract_file(h, ui);
+        if (d != NULL) {
+            int err = sha1_process_all(d, ui->length, sha1);
+            free(d);
+            if (err != CRYPT_OK) {
+                return CHM_ENUMERATOR_FAILURE;
+            }
         }
-      }
     }
 
     sha1_to_hex(sha1, sha1Hex);
@@ -97,7 +96,8 @@ static int enum_cb(struct chmFile* h, struct chmUnitInfo* ui, void* ctx) {
         printf("%d,%d,%d,%s,%s,\"%s\"\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
                sha1Hex, ui->path);
     } else {
-        printf("%1d,%d,%d,%s,%s,%s\n", (int)ui->space, (int)ui->start, (int)ui->length, buf, sha1Hex, ui->path);
+        printf("%1d,%d,%d,%s,%s,%s\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
+               sha1Hex, ui->path);
     }
 
     if (ui->length == 0 || !isFile) {
@@ -129,7 +129,7 @@ int main(int c, char** v) {
         exit(1);
     }
 
-    /* test_asan_1(0); */
+/* test_asan_1(0); */
 #if 0
     int err = sha1_test();
     if (err != CRYPT_OK) {

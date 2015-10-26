@@ -1339,26 +1339,42 @@ LONGINT64 chm_retrieve_object(struct chmFile* h, struct chmUnitInfo* ui, unsigne
     }
 }
 
+static int flags_from_path(char* path) {
+    int flags = 0;
+    size_t n = strlen(path);
+
+    if (path[n - 1] == '/')
+        flags |= CHM_ENUMERATE_DIRS;
+    else
+        flags |= CHM_ENUMERATE_FILES;
+
+    if (n > 0 && path[0] == '/') {
+        if (n > 1 && (path[1] == '#' || path[1] == '$'))
+            flags |= CHM_ENUMERATE_SPECIAL;
+        else
+            flags |= CHM_ENUMERATE_NORMAL;
+    } else
+        flags |= CHM_ENUMERATE_META;
+    return flags;
+}
+
 /* enumerate the objects in the .chm archive */
 int chm_enumerate(struct chmFile* h, int what, CHM_ENUMERATOR e, void* context) {
     int32_t curPage;
-
-    /* buffer to hold whatever page we're looking at */
-    /* RWE 6/12/2003 */
-    uint8_t* page_buf = malloc((unsigned int)h->block_len);
     struct chmPmglHeader header;
     uint8_t* end;
     uint8_t* cur;
     unsigned int lenRemain;
-    uint64_t ui_path_len;
+
+    /* buffer to hold whatever page we're looking at */
+    uint8_t* page_buf = malloc((unsigned int)h->block_len);
+    if (page_buf == NULL)
+        return 0;
 
     /* the current ui */
     struct chmUnitInfo ui;
     int type_bits = (what & 0x7);
     int filter_bits = (what & 0xF8);
-
-    if (page_buf == NULL)
-        return 0;
 
     /* starting page */
     curPage = h->index_head;
@@ -1384,33 +1400,12 @@ int chm_enumerate(struct chmFile* h, int what, CHM_ENUMERATOR e, void* context) 
 
         /* loop over this page */
         while (cur < end) {
-            ui.flags = 0;
-
             if (!_chm_parse_PMGL_entry(&cur, &ui)) {
                 free(page_buf);
                 return 0;
             }
 
-            /* get the length of the path */
-            ui_path_len = strlen(ui.path) - 1;
-
-            /* check for DIRS */
-            if (ui.path[ui_path_len] == '/')
-                ui.flags |= CHM_ENUMERATE_DIRS;
-
-            /* check for FILES */
-            if (ui.path[ui_path_len] != '/')
-                ui.flags |= CHM_ENUMERATE_FILES;
-
-            /* check for NORMAL vs. META */
-            if (ui.path[0] == '/') {
-                /* check for NORMAL vs. SPECIAL */
-                if (ui.path[1] == '#' || ui.path[1] == '$')
-                    ui.flags |= CHM_ENUMERATE_SPECIAL;
-                else
-                    ui.flags |= CHM_ENUMERATE_NORMAL;
-            } else
-                ui.flags |= CHM_ENUMERATE_META;
+            ui.flags = flags_from_path(ui.path);
 
             if (!(type_bits & ui.flags))
                 continue;
@@ -1446,37 +1441,30 @@ int chm_enumerate(struct chmFile* h, int what, CHM_ENUMERATOR e, void* context) 
 
 int chm_enumerate_dir(struct chmFile* h, const char* prefix, int what, CHM_ENUMERATOR e,
                       void* context) {
-    /*
-     * XXX: do this efficiently (i.e. using the tree index)
-     */
-
     int32_t curPage;
-
-    /* buffer to hold whatever page we're looking at */
-    /* RWE 6/12/2003 */
-    uint8_t* page_buf = malloc((unsigned int)h->block_len);
     struct chmPmglHeader header;
     uint8_t* end;
     uint8_t* cur;
     unsigned int lenRemain;
 
-    /* set to 1 once we've started */
-    int it_has_begun = 0;
+    /* buffer to hold whatever page we're looking at */
+    uint8_t* page_buf = malloc((unsigned int)h->block_len);
+    if (page_buf == NULL)
+        return 0;
 
     /* the current ui */
     struct chmUnitInfo ui;
     int type_bits = (what & 0x7);
     int filter_bits = (what & 0xF8);
-    uint64_t ui_path_len;
+
+    /* set to 1 once we've started */
+    int it_has_begun = 0;
 
     /* the length of the prefix */
     char prefixRectified[CHM_MAX_PATHLEN + 1];
     int prefixLen;
     char lastPath[CHM_MAX_PATHLEN + 1];
     int lastPathLen;
-
-    if (page_buf == NULL)
-        return 0;
 
     /* starting page */
     curPage = h->index_head;
@@ -1516,8 +1504,6 @@ int chm_enumerate_dir(struct chmFile* h, const char* prefix, int what, CHM_ENUME
 
         /* loop over this page */
         while (cur < end) {
-            ui.flags = 0;
-
             if (!_chm_parse_PMGL_entry(&cur, &ui)) {
                 free(page_buf);
                 return 0;
@@ -1551,26 +1537,7 @@ int chm_enumerate_dir(struct chmFile* h, const char* prefix, int what, CHM_ENUME
             lastPath[CHM_MAX_PATHLEN] = '\0';
             lastPathLen = strlen(lastPath);
 
-            /* get the length of the path */
-            ui_path_len = strlen(ui.path) - 1;
-
-            /* check for DIRS */
-            if (ui.path[ui_path_len] == '/')
-                ui.flags |= CHM_ENUMERATE_DIRS;
-
-            /* check for FILES */
-            if (ui.path[ui_path_len] != '/')
-                ui.flags |= CHM_ENUMERATE_FILES;
-
-            /* check for NORMAL vs. META */
-            if (ui.path[0] == '/') {
-                /* check for NORMAL vs. SPECIAL */
-                if (ui.path[1] == '#' || ui.path[1] == '$')
-                    ui.flags |= CHM_ENUMERATE_SPECIAL;
-                else
-                    ui.flags |= CHM_ENUMERATE_NORMAL;
-            } else
-                ui.flags |= CHM_ENUMERATE_META;
+            ui.flags = flags_from_path(ui.path);
 
             if (!(type_bits & ui.flags))
                 continue;
