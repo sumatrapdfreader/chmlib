@@ -20,7 +20,7 @@ clang_rel()
   CFLAGS="-g -fsanitize=address -O3 -Isrc -Wall"
   OUT=obj/clang/rel
   mkdir -p $OUT
-  $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c
+  $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
   $CC -o $OUT/test_chmLib $CFLAGS $CHM_SRCS tools/test_chmLib.c
   $CC -o $OUT/extract_chmLib $CFLAGS $CHM_SRCS tools/extract_chmLib.c
   $CC -o $OUT/enumdir_chmLib $CFLAGS $CHM_SRCS tools/enumdir_chmLib.c
@@ -35,7 +35,7 @@ clang_rel_one()
   CFLAGS="-g -fsanitize=address -O0 -Isrc -Weverything -Wno-sign-conversion -Wno-padded -Wno-sign-compare -Wno-conversion"
   OUT=obj/clang/rel
   mkdir -p $OUT
-  $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c
+  $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
 }
 
 clang_dbg()
@@ -44,7 +44,7 @@ clang_dbg()
   CFLAGS="-g -fsanitize=address -O0 -Isrc -Wall"
   OUT=obj/clang/dbg
   mkdir -p $OUT
-  $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c
+  $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
   $CC -o $OUT/test_chmLib $CFLAGS $CHM_SRCS tools/test_chmLib.c
   $CC -o $OUT/extract_chmLib $CFLAGS $CHM_SRCS tools/extract_chmLib.c
   $CC -o $OUT/enumdir_chmLib $CFLAGS $CHM_SRCS tools/enumdir_chmLib.c
@@ -59,7 +59,7 @@ gcc_rel()
   CFLAGS="-g -O3 -Isrc -Wall"
   OUT=obj/clang/rel
   mkdir -p $OUT
-  $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c
+  $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
   $CC -o $OUT/test_chmLib $CFLAGS $CHM_SRCS tools/test_chmLib.c
   $CC -o $OUT/extract_chmLib $CFLAGS $CHM_SRCS tools/extract_chmLib.c
   $CC -o $OUT/enumdir_chmLib $CFLAGS $CHM_SRCS tools/enumdir_chmLib.c

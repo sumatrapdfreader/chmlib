@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "sha1.h"
 #include "chm_lib.h"
 
 #define UNUSED(x) (void) x
@@ -67,8 +68,7 @@ static int enum_cb(struct chmFile* h, struct chmUnitInfo* ui, void* ctx) {
         printf("%d,%d,%d,%s,\"%s\"\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
                ui->path);
     } else {
-        printf("%1d,%d,%d,%s,%s\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
-               ui->path);
+        printf("%1d,%d,%d,%s,%s\n", (int)ui->space, (int)ui->start, (int)ui->length, buf, ui->path);
     }
 
     if (ui->length == 0 || !isFile) {
@@ -104,6 +104,12 @@ int main(int c, char** v) {
     }
 
     /* test_asan_1(0); */
+#if 0
+    int err = sha1_test();
+    if (err != CRYPT_OK) {
+      fprintf(stderr, "sha1 doesn't work\n");
+    }
+#endif
 
     h = chm_open(v[1]);
     if (h == NULL) {
