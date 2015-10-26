@@ -38,6 +38,9 @@ var (
 		"https://www.dropbox.com/s/4t0yhhgwsbs3a35/reference1.txt.bz2",
 		"reference1.txt.bz2",
 		"a3839fadec11e7852e538f37f91e4e9d7c5811b4",
+		"https://www.dropbox.com/s/t8dldr121rtdmnn/reference2.txt.bz2",
+		"reference2.txt.bz2",
+		"83528aa4c1441cb3c907cd158add70195a3dd216",
 	}
 	seenFiles        map[string]bool
 	referenceResults map[string][]string
