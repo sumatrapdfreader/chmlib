@@ -30,6 +30,15 @@ clang_rel()
   $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
 
+clang_rel_one()
+{
+  CC=clang
+  CFLAGS="-g -fsanitize=address -O3 -Isrc -Weverything -Wno-sign-conversion -Wno-padded -Wno-sign-compare -Wno-conversion"
+  OUT=obj/clang/rel
+  mkdir -p $OUT
+  $CC -o $OUT/extract_chmLib $CFLAGS $CHM_SRCS tools/extract_chmLib.c
+}
+
 clang_dbg()
 {
   CC=clang
@@ -57,5 +66,5 @@ gcc_rel()
   $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
 
-gcc_rel
-#clang_rel
+#gcc_rel
+clang_rel_one

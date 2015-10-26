@@ -64,23 +64,14 @@
 #include <stdio.h>
 #endif
 
-#if __sun || __sgi
-#include <strings.h>
-#endif
-
 #ifdef WIN32
 #include <windows.h>
 #include <malloc.h>
-#ifdef _WIN32_WCE
-#define strcasecmp _stricmp
-#define strncasecmp _strnicmp
-#else
 #define strcasecmp stricmp
 #define strncasecmp strnicmp
-#endif
 #else
 /* basic Linux system includes */
-#define _XOPEN_SOURCE 500
+/* #define _XOPEN_SOURCE 500 */
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>

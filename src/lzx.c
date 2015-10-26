@@ -42,7 +42,7 @@ typedef signed int LONG;      /* 32 bits (or more) */
 
 /* some constants defined by the LZX specification */
 #define LZX_MIN_MATCH 2
-#define LZX_MAX_MATCH 257
+/* #define LZX_MAX_MATCH 257 */
 #define LZX_NUM_CHARS 256
 #define LZX_BLOCKTYPE_INVALID 0 /* also blocktypes 4-7 invalid */
 #define LZX_BLOCKTYPE_VERBATIM 1
