@@ -64,10 +64,10 @@ static int enum_cb(struct chmFile* h, struct chmUnitInfo* ui, void* ctx) {
 
     /* TODO: calculate and print sha1 */
     if (needs_csv_escaping(ui->path)) {
-        printf("%1d,%8d,%8d,%12s,\"%s\"\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
+        printf("%d,%d,%d,%s,\"%s\"\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
                ui->path);
     } else {
-        printf("%1d,%8d,%8d,%12s,%s\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
+        printf("%1d,%d,%d,%s,%s\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
                ui->path);
     }
 
