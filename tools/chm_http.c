@@ -30,14 +30,9 @@
 #include "chm_lib.h"
 
 /* standard system includes */
-#define _REENTRANT
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#if __sun || __sgi
-#include <strings.h>
-#define strrchr rindex
-#endif
 
 /* includes for networking */
 #include <sys/socket.h>
@@ -50,8 +45,10 @@
 
 #include <getopt.h>
 
-int config_port = 8080;
-char config_bind[65536] = "0.0.0.0";
+#define UNUSED(x) (void) x
+
+static int config_port = 8080;
+static char config_bind[65536] = "0.0.0.0";
 
 static void usage(const char* argv0) {
 #ifdef CHM_HTTP_SIMPLE
@@ -217,7 +214,7 @@ struct mime_mapping {
     const char* ctype;
 };
 
-struct mime_mapping mime_types[] = {{".htm", "text/html"},
+static struct mime_mapping mime_types[] = {{".htm", "text/html"},
                                     {".html", "text/html"},
                                     {".css", "text/css"},
                                     {".gif", "image/gif"},
@@ -240,6 +237,8 @@ static const char* lookup_mime(const char* ext) {
 }
 
 static int _print_ui_index(struct chmFile* h, struct chmUnitInfo* ui, void* context) {
+  UNUSED(h);
+  UNUSED(context);
     FILE* fout = (FILE*)context;
     fprintf(fout,
             "<tr>"

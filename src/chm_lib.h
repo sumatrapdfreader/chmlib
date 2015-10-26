@@ -118,9 +118,6 @@ typedef int (*CHM_ENUMERATOR)(struct chmFile* h, struct chmUnitInfo* ui, void* c
 #define CHM_ENUMERATOR_SUCCESS 2
 int chm_enumerate(struct chmFile* h, int what, CHM_ENUMERATOR e, void* context);
 
-int chm_enumerate_dir(struct chmFile* h, const char* prefix, int what, CHM_ENUMERATOR e,
-                      void* context);
-
 #ifdef __cplusplus
 }
 #endif

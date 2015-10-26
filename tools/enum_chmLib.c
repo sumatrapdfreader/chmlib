@@ -29,12 +29,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-/*
- * callback function for enumerate API
- */
-int _print_ui(struct chmFile* h, struct chmUnitInfo* ui, void* context) {
-    static char szBuf[128];
-    memset(szBuf, 0, 128);
+#define UNUSED(x) (void) x
+
+static int _print_ui(struct chmFile* h, struct chmUnitInfo* ui, void* context) {
+    static char szBuf[128] = {0};
+
+    UNUSED(h);
+    UNUSED(context);
+
     if (ui->flags & CHM_ENUMERATE_NORMAL)
         strcpy(szBuf, "normal ");
     else if (ui->flags & CHM_ENUMERATE_SPECIAL)

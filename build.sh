@@ -17,13 +17,11 @@ CHM_SRCS="src/chm_lib.c src/lzx.c"
 clang_rel()
 {
   CC=clang
-  CFLAGS="-g -fsanitize=address -O3 -Isrc -Wall"
+  CFLAGS="-g -fsanitize=address -O3 -Isrc -Weverything -Wno-sign-conversion -Wno-padded -Wno-sign-compare -Wno-conversion -Wno-missing-noreturn"
   OUT=obj/clang/rel
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
-  $CC -o $OUT/test_chmLib $CFLAGS $CHM_SRCS tools/test_chmLib.c
   $CC -o $OUT/extract_chmLib $CFLAGS $CHM_SRCS tools/extract_chmLib.c
-  $CC -o $OUT/enumdir_chmLib $CFLAGS $CHM_SRCS tools/enumdir_chmLib.c
   $CC -o $OUT/enum_chmLib $CFLAGS $CHM_SRCS tools/enum_chmLib.c
   $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
@@ -45,9 +43,7 @@ clang_dbg()
   OUT=obj/clang/dbg
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
-  $CC -o $OUT/test_chmLib $CFLAGS $CHM_SRCS tools/test_chmLib.c
   $CC -o $OUT/extract_chmLib $CFLAGS $CHM_SRCS tools/extract_chmLib.c
-  $CC -o $OUT/enumdir_chmLib $CFLAGS $CHM_SRCS tools/enumdir_chmLib.c
   $CC -o $OUT/enum_chmLib $CFLAGS $CHM_SRCS tools/enum_chmLib.c
   $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
@@ -60,12 +56,11 @@ gcc_rel()
   OUT=obj/clang/rel
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
-  $CC -o $OUT/test_chmLib $CFLAGS $CHM_SRCS tools/test_chmLib.c
   $CC -o $OUT/extract_chmLib $CFLAGS $CHM_SRCS tools/extract_chmLib.c
-  $CC -o $OUT/enumdir_chmLib $CFLAGS $CHM_SRCS tools/enumdir_chmLib.c
   $CC -o $OUT/enum_chmLib $CFLAGS $CHM_SRCS tools/enum_chmLib.c
   $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
 
 #gcc_rel
-clang_rel_one
+#clang_rel_one
+clang_rel
