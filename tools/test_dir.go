@@ -306,32 +306,29 @@ func loadAndParseReferenceFile(path string) error {
 	return parseReferenceFile(d)
 }
 
-// TODO: this doesn't work. Returns some random html with 200, even though
-// the corresponding wget works (it does follow 302 redirects)
-// is it a problem with cookies not being
-func httpDl2(uri, fileName string) error {
-	res, err := http.Get(uri)
-	if err != nil {
-		return err
+const (
+	debugHTTP = false
+)
+
+func dumpReq(req *http.Request) {
+	if debugHTTP {
+		d, _ := httputil.DumpRequest(req, false)
+		fmt.Printf("%s\n", string(d))
 	}
-	if res.StatusCode != 200 {
-		return fmt.Errorf("httpDl() failed because StatusCode = %d", res.StatusCode)
+}
+
+func dumpResp(rsp *http.Response) {
+	if debugHTTP {
+		d, _ := httputil.DumpResponse(rsp, false)
+		fmt.Printf("%s\n", string(d))
 	}
-	d, err := ioutil.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		return err
-	}
-	if res.StatusCode != 200 {
-		return fmt.Errorf("httpDl() failed because StatusCode = %d", res.StatusCode)
-	}
-	return ioutil.WriteFile(fileName, d, 0644)
 }
 
 // TODO: this doesn't work. Returns some random html with 200, even though
 // the corresponding wget works (it does follow 302 redirects)
 // is it a problem with cookies not being
 func httpDl(uri, fileName string) error {
+	fmt.Printf("httpDl: %s\n", uri)
 	options := cookiejar.Options{
 		PublicSuffixList: publicsuffix.List,
 	}
@@ -341,8 +338,7 @@ func httpDl(uri, fileName string) error {
 	}
 	client := http.Client{Jar: jar}
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		fmt.Printf("redirect\n")
-		httputil.DumpRequest(req, false)
+		dumpReq(req)
 		if len(via) >= 10 {
 			return fmt.Errorf("too many redirects")
 		}
@@ -356,7 +352,16 @@ func httpDl(uri, fileName string) error {
 		}
 		return nil
 	}
-	resp, err := client.Get(uri)
+
+	req, err := http.NewRequest("GET", uri, nil)
+	// Note: this is crucial. Dropbox will return some html if User-Agent is not defined
+	req.Header.Add("User-Agent", "curl/7.43.0")
+	dumpReq(req)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
+	dumpResp(resp)
 	if err != nil {
 		return err
 	}
@@ -376,12 +381,12 @@ func downloadAndParseReferenceFile(i int) error {
 	fileName := referenceFiles[i*3+1]
 	expectedSha1Hex := referenceFiles[i*3+2]
 	if !fileExists(fileName) {
-		fmt.Printf("file '%s' doesn't exist, downloading...", fileName)
+		fmt.Printf("file '%s' doesn't exist, downloading...\n", fileName)
 		err := httpDl(uri, fileName)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("\n")
+		fmt.Printf("downloaded ok!\n")
 	}
 	sha1Hex, err := fileSha1Hex(fileName)
 	if err != nil {
