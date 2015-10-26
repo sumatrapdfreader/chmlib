@@ -253,14 +253,14 @@ static int _unmarshal_uuid(unsigned char** pData, unsigned int* pDataLen, unsign
 }
 
 /* names of sections essential to decompression */
-static const char _CHMU_RESET_TABLE[] =
+static const char CHMU_RESET_TABLE[] =
     "::DataSpace/Storage/MSCompressed/Transform/"
     "{7FC28940-9D31-11D0-9B27-00A0C91E9C7C}/"
     "InstanceData/ResetTable";
-static const char _CHMU_LZXC_CONTROLDATA[] = "::DataSpace/Storage/MSCompressed/ControlData";
-static const char _CHMU_CONTENT[] = "::DataSpace/Storage/MSCompressed/Content";
+static const char CHMU_LZXC_CONTROLDATA[] = "::DataSpace/Storage/MSCompressed/ControlData";
+static const char CHMU_CONTENT[] = "::DataSpace/Storage/MSCompressed/Content";
 #if 0
-static const char _CHMU_SPANINFO[] = "::DataSpace/Storage/MSCompressed/SpanInfo";
+static const char CHMU_SPANINFO[] = "::DataSpace/Storage/MSCompressed/SpanInfo";
 #endif
 
 /*
@@ -268,8 +268,8 @@ static const char _CHMU_SPANINFO[] = "::DataSpace/Storage/MSCompressed/SpanInfo"
  */
 
 /* structure of ITSF headers */
-#define _CHM_ITSF_V2_LEN (0x58)
-#define _CHM_ITSF_V3_LEN (0x60)
+#define CHM_ITSF_V2_LEN 0x58
+#define CHM_ITSF_V3_LEN 0x60
 struct chmItsfHeader {
     char signature[4];       /*  0 (ITSF) */
     int32_t version;         /*  4 */
@@ -289,7 +289,7 @@ struct chmItsfHeader {
 static int _unmarshal_itsf_header(unsigned char** pData, unsigned int* pDataLen,
                                   struct chmItsfHeader* dest) {
     /* we only know how to deal with the 0x58 and 0x60 byte structures */
-    if (*pDataLen != _CHM_ITSF_V2_LEN && *pDataLen != _CHM_ITSF_V3_LEN)
+    if (*pDataLen != CHM_ITSF_V2_LEN && *pDataLen != CHM_ITSF_V3_LEN)
         return 0;
 
     /* unmarshal common fields */
@@ -313,10 +313,10 @@ static int _unmarshal_itsf_header(unsigned char** pData, unsigned int* pDataLen,
     if (memcmp(dest->signature, "ITSF", 4) != 0)
         return 0;
     if (dest->version == 2) {
-        if (dest->header_len < _CHM_ITSF_V2_LEN)
+        if (dest->header_len < CHM_ITSF_V2_LEN)
             return 0;
     } else if (dest->version == 3) {
-        if (dest->header_len < _CHM_ITSF_V3_LEN)
+        if (dest->header_len < CHM_ITSF_V3_LEN)
             return 0;
     } else
         return 0;
@@ -340,7 +340,7 @@ static int _unmarshal_itsf_header(unsigned char** pData, unsigned int* pDataLen,
 }
 
 /* structure of ITSP headers */
-#define _CHM_ITSP_V1_LEN (0x54)
+#define CHM_ITSP_V1_LEN 0x54
 struct chmItspHeader {
     char signature[4];        /*  0 (ITSP) */
     int32_t version;          /*  4 */
@@ -362,7 +362,7 @@ struct chmItspHeader {
 static int _unmarshal_itsp_header(unsigned char** pData, unsigned int* pDataLen,
                                   struct chmItspHeader* dest) {
     /* we only know how to deal with a 0x54 byte structures */
-    if (*pDataLen != _CHM_ITSP_V1_LEN)
+    if (*pDataLen != CHM_ITSP_V1_LEN)
         return 0;
 
     /* unmarshal fields */
@@ -387,7 +387,7 @@ static int _unmarshal_itsp_header(unsigned char** pData, unsigned int* pDataLen,
         return 0;
     if (dest->version != 1)
         return 0;
-    if (dest->header_len != _CHM_ITSP_V1_LEN)
+    if (dest->header_len != CHM_ITSP_V1_LEN)
         return 0;
     /* SumatraPDF: sanity check */
     if (dest->block_len == 0)
@@ -398,7 +398,7 @@ static int _unmarshal_itsp_header(unsigned char** pData, unsigned int* pDataLen,
 
 /* structure of PMGL headers */
 static const char _chm_pmgl_marker[4] = "PMGL";
-#define _CHM_PMGL_LEN (0x14)
+#define CHM_PMGL_LEN 0x14
 struct chmPmglHeader {
     char signature[4];     /*  0 (PMGL) */
     uint32_t free_space;   /*  4 */
@@ -410,10 +410,10 @@ struct chmPmglHeader {
 static int _unmarshal_pmgl_header(unsigned char** pData, unsigned int* pDataLen,
                                   unsigned int blockLen, struct chmPmglHeader* dest) {
     /* we only know how to deal with a 0x14 byte structures */
-    if (*pDataLen != _CHM_PMGL_LEN)
+    if (*pDataLen != CHM_PMGL_LEN)
         return 0;
     /* SumatraPDF: sanity check */
-    if (blockLen < _CHM_PMGL_LEN)
+    if (blockLen < CHM_PMGL_LEN)
         return 0;
 
     /* unmarshal fields */
@@ -427,7 +427,7 @@ static int _unmarshal_pmgl_header(unsigned char** pData, unsigned int* pDataLen,
     if (memcmp(dest->signature, _chm_pmgl_marker, 4) != 0)
         return 0;
     /* SumatraPDF: sanity check */
-    if (dest->free_space > blockLen - _CHM_PMGL_LEN)
+    if (dest->free_space > blockLen - CHM_PMGL_LEN)
         return 0;
 
     return 1;
@@ -435,7 +435,7 @@ static int _unmarshal_pmgl_header(unsigned char** pData, unsigned int* pDataLen,
 
 /* structure of PMGI headers */
 static const char _chm_pmgi_marker[4] = "PMGI";
-#define _CHM_PMGI_LEN (0x08)
+#define CHM_PMGI_LEN 0x08
 struct chmPmgiHeader {
     char signature[4];   /*  0 (PMGI) */
     uint32_t free_space; /*  4 */
@@ -444,10 +444,10 @@ struct chmPmgiHeader {
 static int _unmarshal_pmgi_header(unsigned char** pData, unsigned int* pDataLen,
                                   unsigned int blockLen, struct chmPmgiHeader* dest) {
     /* we only know how to deal with a 0x8 byte structures */
-    if (*pDataLen != _CHM_PMGI_LEN)
+    if (*pDataLen != CHM_PMGI_LEN)
         return 0;
     /* SumatraPDF: sanity check */
-    if (blockLen < _CHM_PMGI_LEN)
+    if (blockLen < CHM_PMGI_LEN)
         return 0;
 
     /* unmarshal fields */
@@ -458,14 +458,14 @@ static int _unmarshal_pmgi_header(unsigned char** pData, unsigned int* pDataLen,
     if (memcmp(dest->signature, _chm_pmgi_marker, 4) != 0)
         return 0;
     /* SumatraPDF: sanity check */
-    if (dest->free_space > blockLen - _CHM_PMGI_LEN)
+    if (dest->free_space > blockLen - CHM_PMGI_LEN)
         return 0;
 
     return 1;
 }
 
 /* structure of LZXC reset table */
-#define _CHM_LZXC_RESETTABLE_V1_LEN (0x28)
+#define CHM_LZXC_RESETTABLE_V1_LEN 0x28
 struct chmLzxcResetTable {
     uint32_t version;
     uint32_t block_count;
@@ -479,7 +479,7 @@ struct chmLzxcResetTable {
 static int _unmarshal_lzxc_reset_table(unsigned char** pData, unsigned int* pDataLen,
                                        struct chmLzxcResetTable* dest) {
     /* we only know how to deal with a 0x28 byte structures */
-    if (*pDataLen != _CHM_LZXC_RESETTABLE_V1_LEN)
+    if (*pDataLen != CHM_LZXC_RESETTABLE_V1_LEN)
         return 0;
 
     /* unmarshal fields */
@@ -504,8 +504,8 @@ static int _unmarshal_lzxc_reset_table(unsigned char** pData, unsigned int* pDat
 }
 
 /* structure of LZXC control data block */
-#define _CHM_LZXC_MIN_LEN (0x18)
-#define _CHM_LZXC_V2_LEN (0x1c)
+#define CHM_LZXC_MIN_LEN 0x18
+#define CHM_LZXC_V2_LEN 0x1c
 struct chmLzxcControlData {
     uint32_t size;            /*  0        */
     char signature[4];        /*  4 (LZXC) */
@@ -519,7 +519,7 @@ struct chmLzxcControlData {
 static int _unmarshal_lzxc_control_data(unsigned char** pData, unsigned int* pDataLen,
                                         struct chmLzxcControlData* dest) {
     /* we want at least 0x18 bytes */
-    if (*pDataLen < _CHM_LZXC_MIN_LEN)
+    if (*pDataLen < CHM_LZXC_MIN_LEN)
         return 0;
 
     /* unmarshal fields */
@@ -530,7 +530,7 @@ static int _unmarshal_lzxc_control_data(unsigned char** pData, unsigned int* pDa
     _unmarshal_uint32(pData, pDataLen, &dest->windowSize);
     _unmarshal_uint32(pData, pDataLen, &dest->windowsPerReset);
 
-    if (*pDataLen >= _CHM_LZXC_V2_LEN)
+    if (*pDataLen >= CHM_LZXC_V2_LEN)
         _unmarshal_uint32(pData, pDataLen, &dest->unknown_18);
     else
         dest->unknown_18 = 0;
@@ -727,7 +727,7 @@ struct chmFile* chm_open(const char* filename)
 #endif
 
     /* read and verify header */
-    sremain = _CHM_ITSF_V3_LEN;
+    sremain = CHM_ITSF_V3_LEN;
     sbufpos = sbuffer;
     if (_chm_fetch_bytes(newHandle, sbuffer, (uint64_t)0, sremain) != sremain ||
         !_unmarshal_itsf_header(&sbufpos, &sremain, &itsfHeader)) {
@@ -741,7 +741,7 @@ struct chmFile* chm_open(const char* filename)
     newHandle->data_offset = itsfHeader.data_offset;
 
     /* now, read and verify the directory header chunk */
-    sremain = _CHM_ITSP_V1_LEN;
+    sremain = CHM_ITSP_V1_LEN;
     sbufpos = sbuffer;
     if (_chm_fetch_bytes(newHandle, sbuffer, (uint64_t)itsfHeader.dir_offset, sremain) != sremain ||
         !_unmarshal_itsp_header(&sbufpos, &sremain, &itspHeader)) {
@@ -769,7 +769,7 @@ struct chmFile* chm_open(const char* filename)
 #if 0
     /* fetch span */
     if (CHM_RESOLVE_SUCCESS != chm_resolve_object(newHandle,
-                                                  _CHMU_SPANINFO,
+                                                  CHMU_SPANINFO,
                                                   &uiSpan)                ||
         uiSpan.space == CHM_COMPRESSED)
     {
@@ -794,18 +794,18 @@ struct chmFile* chm_open(const char* filename)
 
     /* prefetch most commonly needed unit infos */
     if (CHM_RESOLVE_SUCCESS !=
-            chm_resolve_object(newHandle, _CHMU_RESET_TABLE, &newHandle->rt_unit) ||
+            chm_resolve_object(newHandle, CHMU_RESET_TABLE, &newHandle->rt_unit) ||
         newHandle->rt_unit.space == CHM_COMPRESSED ||
-        CHM_RESOLVE_SUCCESS != chm_resolve_object(newHandle, _CHMU_CONTENT, &newHandle->cn_unit) ||
+        CHM_RESOLVE_SUCCESS != chm_resolve_object(newHandle, CHMU_CONTENT, &newHandle->cn_unit) ||
         newHandle->cn_unit.space == CHM_COMPRESSED ||
-        CHM_RESOLVE_SUCCESS != chm_resolve_object(newHandle, _CHMU_LZXC_CONTROLDATA, &uiLzxc) ||
+        CHM_RESOLVE_SUCCESS != chm_resolve_object(newHandle, CHMU_LZXC_CONTROLDATA, &uiLzxc) ||
         uiLzxc.space == CHM_COMPRESSED) {
         newHandle->compression_enabled = 0;
     }
 
     /* read reset table info */
     if (newHandle->compression_enabled) {
-        sremain = _CHM_LZXC_RESETTABLE_V1_LEN;
+        sremain = CHM_LZXC_RESETTABLE_V1_LEN;
         sbufpos = sbuffer;
         if (chm_retrieve_object(newHandle, &newHandle->rt_unit, sbuffer, 0, sremain) != sremain ||
             !_unmarshal_lzxc_reset_table(&sbufpos, &sremain, &newHandle->reset_table)) {
@@ -1037,7 +1037,7 @@ static uint8_t* _chm_find_in_PMGL(uint8_t* page_buf, uint32_t block_len, const c
 
     /* figure out where to start and end */
     cur = page_buf;
-    hremain = _CHM_PMGL_LEN;
+    hremain = CHM_PMGL_LEN;
     if (!_unmarshal_pmgl_header(&cur, &hremain, block_len, &header))
         return NULL;
     end = page_buf + block_len - (header.free_space);
@@ -1077,7 +1077,7 @@ static int32_t _chm_find_in_PMGI(uint8_t* page_buf, uint32_t block_len, const ch
 
     /* figure out where to start and end */
     cur = page_buf;
-    hremain = _CHM_PMGI_LEN;
+    hremain = CHM_PMGI_LEN;
     if (!_unmarshal_pmgi_header(&cur, &hremain, block_len, &header))
         return -1;
     end = page_buf + block_len - (header.free_space);
@@ -1459,7 +1459,7 @@ int chm_enumerate(struct chmFile* h, int what, CHM_ENUMERATOR e, void* context) 
 
         /* figure out start and end for this page */
         cur = page_buf;
-        lenRemain = _CHM_PMGL_LEN;
+        lenRemain = CHM_PMGL_LEN;
         if (!_unmarshal_pmgl_header(&cur, &lenRemain, h->block_len, &header)) {
             free(page_buf);
             return 0;
@@ -1591,7 +1591,7 @@ int chm_enumerate_dir(struct chmFile* h, const char* prefix, int what, CHM_ENUME
 
         /* figure out start and end for this page */
         cur = page_buf;
-        lenRemain = _CHM_PMGL_LEN;
+        lenRemain = CHM_PMGL_LEN;
         if (!_unmarshal_pmgl_header(&cur, &lenRemain, h->block_len, &header)) {
             free(page_buf);
             return 0;
