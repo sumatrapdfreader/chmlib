@@ -274,7 +274,9 @@ static const char _CHMU_RESET_TABLE[] =
     "InstanceData/ResetTable";
 static const char _CHMU_LZXC_CONTROLDATA[] = "::DataSpace/Storage/MSCompressed/ControlData";
 static const char _CHMU_CONTENT[] = "::DataSpace/Storage/MSCompressed/Content";
+#if 0
 static const char _CHMU_SPANINFO[] = "::DataSpace/Storage/MSCompressed/SpanInfo";
+#endif
 
 /*
  * structures local to this module

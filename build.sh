@@ -16,7 +16,7 @@ set -o pipefail
 #LDFLAGS=-lpthread
 
 CC=clang
-CFLAGS="-g -fsanitize=address -O3 -Isrc"
+CFLAGS="-g -fsanitize=address -O3 -Isrc -Wall"
 CHM_SRCS="src/chm_lib.c src/lzx.c"
 
 clang_rel()
@@ -32,7 +32,7 @@ clang_rel()
 
 clang_dbg()
 {
-  CFLAGS="-g -fsanitize=address -O0 -Isrc"
+  CFLAGS="-g -fsanitize=address -O0 -Isrc -Wall"
   OUT=obj/clang/dbg
   mkdir -p $OUT
   $CC -o $OUT/test_chmLib $CFLAGS $CHM_SRCS tools/test_chmLib.c
