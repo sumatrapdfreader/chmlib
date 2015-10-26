@@ -39,27 +39,23 @@ static int is_dir(const char* path) {
 }
 
 static int enum_cb(struct chmFile* h, struct chmUnitInfo* ui, void* ctx) {
-    static char buf[128] = {0};
-
-    UNUSED(h);
     UNUSED(ctx);
+    char buf[128] = {0};
 
     int isFile = ui->flags & CHM_ENUMERATE_FILES;
 
-    if (ui->flags & CHM_ENUMERATE_NORMAL)
-        strcpy(buf, "normal ");
-    else if (ui->flags & CHM_ENUMERATE_SPECIAL)
-        strcpy(buf, "special ");
+    if (ui->flags & CHM_ENUMERATE_SPECIAL)
+        strcpy(buf, "special_");
     else if (ui->flags & CHM_ENUMERATE_META)
-        strcpy(buf, "meta ");
+        strcpy(buf, "meta_");
 
     if (ui->flags & CHM_ENUMERATE_DIRS)
         strcat(buf, "dir");
     else if (isFile)
         strcat(buf, "file");
 
-    printf("   %1d %8d %8d   %s\t\t%s\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
-           ui->path);
+    /* TODO: csv-escape ui->path */
+    printf("%1d,%8d,%8d,%s,%s\n", (int)ui->space, (int)ui->start, (int)ui->length, buf, ui->path);
 
     if (ui->length == 0 || !isFile) {
         return CHM_ENUMERATOR_CONTINUE;
@@ -90,9 +86,6 @@ int main(int c, char** v) {
         fprintf(stderr, "failed to open %s\n", v[1]);
         exit(1);
     }
-
-    printf(" spc    start   length   type\t\t\tname\n");
-    printf(" ===    =====   ======   ====\t\t\t====\n");
 
     if (!chm_enumerate(h, CHM_ENUMERATE_ALL, enum_cb, NULL)) {
         printf("   *** ERROR ***\n");
