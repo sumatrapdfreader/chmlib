@@ -45,29 +45,29 @@ typedef unsigned int ULONG;   /* 32 bits (or more) */
 typedef signed int LONG;      /* 32 bits (or more) */
 
 /* some constants defined by the LZX specification */
-#define LZX_MIN_MATCH (2)
-#define LZX_MAX_MATCH (257)
-#define LZX_NUM_CHARS (256)
-#define LZX_BLOCKTYPE_INVALID (0) /* also blocktypes 4-7 invalid */
-#define LZX_BLOCKTYPE_VERBATIM (1)
-#define LZX_BLOCKTYPE_ALIGNED (2)
-#define LZX_BLOCKTYPE_UNCOMPRESSED (3)
-#define LZX_PRETREE_NUM_ELEMENTS (20)
-#define LZX_ALIGNED_NUM_ELEMENTS (8)    /* aligned offset tree #elements */
-#define LZX_NUM_PRIMARY_LENGTHS (7)     /* this one missing from spec! */
-#define LZX_NUM_SECONDARY_LENGTHS (249) /* length tree #elements */
+#define LZX_MIN_MATCH 2
+#define LZX_MAX_MATCH 257
+#define LZX_NUM_CHARS 256
+#define LZX_BLOCKTYPE_INVALID 0 /* also blocktypes 4-7 invalid */
+#define LZX_BLOCKTYPE_VERBATIM 1
+#define LZX_BLOCKTYPE_ALIGNED 2
+#define LZX_BLOCKTYPE_UNCOMPRESSED 3
+#define LZX_PRETREE_NUM_ELEMENTS 20
+#define LZX_ALIGNED_NUM_ELEMENTS 8    /* aligned offset tree #elements */
+#define LZX_NUM_PRIMARY_LENGTHS 7     /* this one missing from spec! */
+#define LZX_NUM_SECONDARY_LENGTHS 249 /* length tree #elements */
 
 /* LZX huffman defines: tweak tablebits as desired */
-#define LZX_PRETREE_MAXSYMBOLS (LZX_PRETREE_NUM_ELEMENTS)
-#define LZX_PRETREE_TABLEBITS (6)
+#define LZX_PRETREE_MAXSYMBOLS LZX_PRETREE_NUM_ELEMENTS
+#define LZX_PRETREE_TABLEBITS 6
 #define LZX_MAINTREE_MAXSYMBOLS (LZX_NUM_CHARS + 50 * 8)
-#define LZX_MAINTREE_TABLEBITS (12)
+#define LZX_MAINTREE_TABLEBITS 12
 #define LZX_LENGTH_MAXSYMBOLS (LZX_NUM_SECONDARY_LENGTHS + 1)
-#define LZX_LENGTH_TABLEBITS (12)
-#define LZX_ALIGNED_MAXSYMBOLS (LZX_ALIGNED_NUM_ELEMENTS)
-#define LZX_ALIGNED_TABLEBITS (7)
+#define LZX_LENGTH_TABLEBITS 12
+#define LZX_ALIGNED_MAXSYMBOLS LZX_ALIGNED_NUM_ELEMENTS
+#define LZX_ALIGNED_TABLEBITS 7
 
-#define LZX_LENTABLE_SAFETY (64) /* we allow length table decoding overruns */
+#define LZX_LENTABLE_SAFETY 64 /* we allow length table decoding overruns */
 
 #define LZX_DECLARE_TABLE(tbl)                                                       \
     UWORD tbl##_table[(1 << LZX_##tbl##_TABLEBITS) + (LZX_##tbl##_MAXSYMBOLS << 1)]; \
