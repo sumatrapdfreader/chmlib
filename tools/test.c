@@ -7,45 +7,29 @@
  *                                                                         *
  ***************************************************************************/
 
-#include "chm_lib.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef WIN32
-#include <windows.h>
-#include <direct.h>
-#define mkdir(X, Y) _mkdir(X)
-#define snprintf _snprintf
-#else
-#include <unistd.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#endif
+
+#include "chm_lib.h"
 
 #define UNUSED(x) (void) x
 
-/* TODO: actually collect all data */
 static uint8_t* extract_file(struct chmFile* h, struct chmUnitInfo* ui) {
-    uint8_t buf[32 * 1024];
+    LONGINT64 len = (LONGINT64)ui->length;
 
-    LONGINT64 len, remain = (LONGINT64)ui->length;
-    LONGUINT64 offset = 0;
-
-    while (remain != 0) {
-        len = chm_retrieve_object(h, ui, buf, offset, sizeof(buf));
-        if (len > 0) {
-            offset += (LONGUINT64)len;
-            remain -= len;
-        } else {
-            return NULL;
-        }
-    }
-
-    if (remain < 0) {
+    uint8_t* buf = (uint8_t*)malloc(len + 1);
+    if (buf == NULL) {
         return NULL;
     }
+    buf[len] = 0; /* null-terminate just in case */
 
-    return NULL;
+    LONGINT64 n = chm_retrieve_object(h, ui, buf, 0, len);
+    if (n != len) {
+        free(buf);
+        return NULL;
+    }
+    return buf;
 }
 
 /* return 1 if path ends with '/' */
