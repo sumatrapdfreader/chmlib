@@ -31,7 +31,8 @@ clang_rel()
 clang_rel_one()
 {
   CC=clang
-  CFLAGS="-g -fsanitize=address -O3 -Isrc -Weverything -Wno-sign-conversion -Wno-padded -Wno-sign-compare -Wno-conversion"
+  # ASAN only seems to work with -O0 (didn't trigger when I compiled with -O1, -O2 and -O3
+  CFLAGS="-g -fsanitize=address -O0 -Isrc -Weverything -Wno-sign-conversion -Wno-padded -Wno-sign-compare -Wno-conversion"
   OUT=obj/clang/rel
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c

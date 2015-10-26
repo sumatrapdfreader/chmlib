@@ -81,11 +81,19 @@ static int enum_cb(struct chmFile* h, struct chmUnitInfo* ui, void* ctx) {
     }
 
     uint8_t* d = extract_file(h, ui);
-    /* TODO: calculate and print sha1 */
     free(d);
 
     return CHM_ENUMERATOR_CONTINUE;
 }
+
+#if 0
+static void test_asan_1(int off) {
+  int stack_array[100];
+  stack_array[1] = 0;
+  int n = stack_array[off + 100];  // BOOM
+  printf("n: %d\n", n);
+}
+#endif
 
 int main(int c, char** v) {
     struct chmFile* h;
@@ -94,6 +102,8 @@ int main(int c, char** v) {
         fprintf(stderr, "usage: %s <chmfile>\n", v[0]);
         exit(1);
     }
+
+    /* test_asan_1(0); */
 
     h = chm_open(v[1]);
     if (h == NULL) {
