@@ -32,77 +32,56 @@
 /*
  * callback function for enumerate API
  */
-int _print_ui(struct chmFile *h,
-              struct chmUnitInfo *ui,
-              void *context)
-{
+int _print_ui(struct chmFile* h, struct chmUnitInfo* ui, void* context) {
     static char szBuf[128];
-	memset(szBuf, 0, 128);
-	if(ui->flags & CHM_ENUMERATE_NORMAL)
-		strcpy(szBuf, "normal ");
-	else if(ui->flags & CHM_ENUMERATE_SPECIAL)
-		strcpy(szBuf, "special ");
-	else if(ui->flags & CHM_ENUMERATE_META)
-		strcpy(szBuf, "meta ");
-	
-	if(ui->flags & CHM_ENUMERATE_DIRS)
-		strcat(szBuf, "dir");
-	else if(ui->flags & CHM_ENUMERATE_FILES)
-		strcat(szBuf, "file");
+    memset(szBuf, 0, 128);
+    if (ui->flags & CHM_ENUMERATE_NORMAL)
+        strcpy(szBuf, "normal ");
+    else if (ui->flags & CHM_ENUMERATE_SPECIAL)
+        strcpy(szBuf, "special ");
+    else if (ui->flags & CHM_ENUMERATE_META)
+        strcpy(szBuf, "meta ");
 
-    printf("   %1d %8d %8d   %s\t\t%s\n",
-           (int)ui->space,
-           (int)ui->start,
-           (int)ui->length,
-		   szBuf,
+    if (ui->flags & CHM_ENUMERATE_DIRS)
+        strcat(szBuf, "dir");
+    else if (ui->flags & CHM_ENUMERATE_FILES)
+        strcat(szBuf, "file");
+
+    printf("   %1d %8d %8d   %s\t\t%s\n", (int)ui->space, (int)ui->start, (int)ui->length, szBuf,
            ui->path);
-    return CHM_ENUMERATOR_CONTINUE;}
+    return CHM_ENUMERATOR_CONTINUE;
+}
 
-int main(int c, char **v)
-{
-    struct chmFile *h;
+int main(int c, char** v) {
+    struct chmFile* h;
     int i;
 
-    if (c < 2)
-    {
+    if (c < 2) {
         fprintf(stderr, "%s <chmfile> [dir] [dir] ...\n", v[0]);
         exit(1);
     }
 
     h = chm_open(v[1]);
-    if (h == NULL)
-    {
+    if (h == NULL) {
         fprintf(stderr, "failed to open %s\n", v[1]);
         exit(1);
     }
 
-    if (c < 3)
-    {
+    if (c < 3) {
         printf("/:\n");
         printf(" spc    start   length   type\t\t\tname\n");
         printf(" ===    =====   ======   ====\t\t\t====\n");
-		
-        if (! chm_enumerate_dir(h,
-                                "/",
-                                CHM_ENUMERATE_ALL,
-                                _print_ui,
-                                NULL))
+
+        if (!chm_enumerate_dir(h, "/", CHM_ENUMERATE_ALL, _print_ui, NULL))
             printf("   *** ERROR ***\n");
-    }
-    else
-    {
-        for (i=2; i<c; i++)
-        {
+    } else {
+        for (i = 2; i < c; i++) {
             printf("%s:\n", v[i]);
             printf(" spc    start   length   name\n");
             printf(" ===    =====   ======   ====\n");
 
-            if (! chm_enumerate_dir(h,
-                                    v[i],
-                                    CHM_ENUMERATE_ALL,
-                                    _print_ui,
-                                    NULL))
-            printf("   *** ERROR ***\n");
+            if (!chm_enumerate_dir(h, v[i], CHM_ENUMERATE_ALL, _print_ui, NULL))
+                printf("   *** ERROR ***\n");
         }
     }
 

@@ -31,54 +31,43 @@
 #include <sys/types.h>
 #endif
 
-struct extract_context
-{
-    const char *base_path;
+struct extract_context {
+    const char* base_path;
 };
 
-static int dir_exists(const char *path)
-{
+static int dir_exists(const char* path) {
 #ifdef WIN32
-        /* why doesn't this work?!? */
-        HANDLE hFile;
+    /* why doesn't this work?!? */
+    HANDLE hFile;
 
-        hFile = CreateFileA(path,
-                        FILE_LIST_DIRECTORY,
-                        0,
-                        NULL,
-                        OPEN_EXISTING,
-                        FILE_ATTRIBUTE_NORMAL,
-                        NULL);
-        if (hFile != INVALID_HANDLE_VALUE)
-        {
+    hFile =
+        CreateFileA(path, FILE_LIST_DIRECTORY, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile != INVALID_HANDLE_VALUE) {
         CloseHandle(hFile);
         return 1;
-        }
-        else
+    } else
         return 0;
 #else
-        struct stat statbuf;
-        if (stat(path, &statbuf) != -1)
-                return 1;
-        else
-                return 0;
+    struct stat statbuf;
+    if (stat(path, &statbuf) != -1)
+        return 1;
+    else
+        return 0;
 #endif
 }
 
-static int rmkdir(char *path)
-{
+static int rmkdir(char* path) {
     /*
      * strip off trailing components unless we can stat the directory, or we
      * have run out of components
      */
 
-    char *i = strrchr(path, '/');
+    char* i = strrchr(path, '/');
 
-    if(path[0] == '\0'  ||  dir_exists(path))
+    if (path[0] == '\0' || dir_exists(path))
         return 0;
 
-    if (i != NULL)
-    {
+    if (i != NULL) {
         *i = '\0';
         rmkdir(path);
         *i = '/';
@@ -86,7 +75,7 @@ static int rmkdir(char *path)
     }
 
 #ifdef WIN32
-        return 0;
+    return 0;
 #else
     if (dir_exists(path))
         return 0;
@@ -98,21 +87,17 @@ static int rmkdir(char *path)
 /*
  * callback function for enumerate API
  */
-int _extract_callback(struct chmFile *h,
-              struct chmUnitInfo *ui,
-              void *context)
-{
+int _extract_callback(struct chmFile* h, struct chmUnitInfo* ui, void* context) {
     LONGUINT64 ui_path_len;
     char buffer[32768];
-    struct extract_context *ctx = (struct extract_context *)context;
-    char *i;
+    struct extract_context* ctx = (struct extract_context*)context;
+    char* i;
 
     if (ui->path[0] != '/')
         return CHM_ENUMERATOR_CONTINUE;
 
     /* quick hack for security hole mentioned by Sven Tantau */
-    if (strstr(ui->path, "/../") != NULL)
-    {
+    if (strstr(ui->path, "/../") != NULL) {
         /* fprintf(stderr, "Not extracting %s (dangerous path)\n", ui->path); */
         return CHM_ENUMERATOR_CONTINUE;
     }
@@ -121,48 +106,40 @@ int _extract_callback(struct chmFile *h,
         return CHM_ENUMERATOR_FAILURE;
 
     /* Get the length of the path */
-    ui_path_len = strlen(ui->path)-1;
+    ui_path_len = strlen(ui->path) - 1;
 
     /* Distinguish between files and dirs */
-    if (ui->path[ui_path_len] != '/' )
-    {
-        FILE *fout;
-        LONGINT64 len, remain=ui->length;
+    if (ui->path[ui_path_len] != '/') {
+        FILE* fout;
+        LONGINT64 len, remain = ui->length;
         LONGUINT64 offset = 0;
 
         printf("--> %s\n", ui->path);
-        if ((fout = fopen(buffer, "wb")) == NULL)
-	{
-	    /* make sure that it isn't just a missing directory before we abort */ 
-	    char newbuf[32768];
-	    strcpy(newbuf, buffer);
-	    i = strrchr(newbuf, '/');
-	    *i = '\0';
-	    rmkdir(newbuf);
-	    if ((fout = fopen(buffer, "wb")) == NULL)
-              return CHM_ENUMERATOR_FAILURE;
-	}
+        if ((fout = fopen(buffer, "wb")) == NULL) {
+            /* make sure that it isn't just a missing directory before we abort */
+            char newbuf[32768];
+            strcpy(newbuf, buffer);
+            i = strrchr(newbuf, '/');
+            *i = '\0';
+            rmkdir(newbuf);
+            if ((fout = fopen(buffer, "wb")) == NULL)
+                return CHM_ENUMERATOR_FAILURE;
+        }
 
-        while (remain != 0)
-        {
-            len = chm_retrieve_object(h, ui, (unsigned char *)buffer, offset, 32768);
-            if (len > 0)
-            {
+        while (remain != 0) {
+            len = chm_retrieve_object(h, ui, (unsigned char*)buffer, offset, 32768);
+            if (len > 0) {
                 fwrite(buffer, 1, (size_t)len, fout);
                 offset += len;
                 remain -= len;
-            }
-            else
-            {
+            } else {
                 fprintf(stderr, "incomplete file: %s\n", ui->path);
                 break;
             }
         }
 
         fclose(fout);
-    }
-    else
-    {
+    } else {
         if (rmkdir(buffer) == -1)
             return CHM_ENUMERATOR_FAILURE;
     }
@@ -170,30 +147,24 @@ int _extract_callback(struct chmFile *h,
     return CHM_ENUMERATOR_CONTINUE;
 }
 
-int main(int c, char **v)
-{
-    struct chmFile *h;
+int main(int c, char** v) {
+    struct chmFile* h;
     struct extract_context ec;
 
-    if (c < 3)
-    {
+    if (c < 3) {
         fprintf(stderr, "usage: %s <chmfile> <outdir>\n", v[0]);
         exit(1);
     }
 
     h = chm_open(v[1]);
-    if (h == NULL)
-    {
+    if (h == NULL) {
         fprintf(stderr, "failed to open %s\n", v[1]);
         exit(1);
     }
 
     printf("%s:\n", v[1]);
     ec.base_path = v[2];
-    if (! chm_enumerate(h,
-                        CHM_ENUMERATE_ALL,
-                        _extract_callback,
-                        (void *)&ec))
+    if (!chm_enumerate(h, CHM_ENUMERATE_ALL, _extract_callback, (void*)&ec))
         printf("   *** ERROR ***\n");
 
     chm_close(h);
