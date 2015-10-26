@@ -38,6 +38,14 @@ static int is_dir(const char* path) {
     return path[n] == '/';
 }
 
+/* return 1 if s contains ',' */
+static int needs_csv_escaping(const char* s) {
+    while (*s && (*s != ',')) {
+        s++;
+    }
+    return *s == ',';
+}
+
 static int enum_cb(struct chmFile* h, struct chmUnitInfo* ui, void* ctx) {
     UNUSED(ctx);
     char buf[128] = {0};
@@ -54,8 +62,14 @@ static int enum_cb(struct chmFile* h, struct chmUnitInfo* ui, void* ctx) {
     else if (isFile)
         strcat(buf, "file");
 
-    /* TODO: csv-escape ui->path */
-    printf("%1d,%8d,%8d,%s,%s\n", (int)ui->space, (int)ui->start, (int)ui->length, buf, ui->path);
+    /* TODO: calculate and print sha1 */
+    if (needs_csv_escaping(ui->path)) {
+        printf("%1d,%8d,%8d,%12s,\"%s\"\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
+               ui->path);
+    } else {
+        printf("%1d,%8d,%8d,%12s,%s\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
+               ui->path);
+    }
 
     if (ui->length == 0 || !isFile) {
         return CHM_ENUMERATOR_CONTINUE;
