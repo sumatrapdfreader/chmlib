@@ -7,7 +7,6 @@ Linux/Unix and Windows (Cygwin)
 
 I. Relevant options:
 
-   CHM_MT:              build library with synchronization for thread-safety
    CHM_USE_PREAD:       use pread instead of lseek/read
    CHM_USE_IO64:        support 64-bit file I/O
 
@@ -44,18 +43,12 @@ Windows (MSVC++, Win CE SDK)
 
 I. Relevant options:
 
-   CHM_MT:              build library with synchronization for thread-safety
-
 II. Windows Standard Build
 
     Unzip ChmLib-vs6.zip in the src directory, and open the ChmLib.dsw file in
     Developer Studio.  (This was developed on Developer Studio 6.  I don't know
     if that matters.)  You may wish to enable or disable certain features by
     adding preprocessor defines under the project settings dialog:
-
-   CHM_MT:              build library with synchronization for thread-safety
-
-   CHM_MT is enabled by default in the Windows build.
 
    The resultant library is called chmlib.lib.
 
@@ -69,13 +62,6 @@ II. Windows Standard Build
   except for chm_http.  I don't know enough about Windows network programming
   to try to get that one working.  Other than that one, all the other examples
   run without any problems.
-
-III. Windows CE Build
-
-    Unzip ChmLib-ce.zip in the src directory.  I don't know much beyond that,
-    as I have no familiarity with Windows CE, but this should be a good
-    starting point.  These project files are from Rich Erwin, who also supplied
-    the necessary code changes to get it running.
 
 Sparc (Solaris)
 ---------------
