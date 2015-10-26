@@ -46,11 +46,6 @@
  *                                                                         *
  ***************************************************************************/
 
-#include "chm_lib.h"
-
-#include "lzx.h"
-
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
@@ -72,6 +67,9 @@
 #include <fcntl.h>
 /* #include <dmalloc.h> */
 #endif
+
+#include "chm_lib.h"
+#include "lzx.h"
 
 #ifdef WIN32
 #define CHM_NULL_FD INVALID_HANDLE_VALUE
@@ -1289,8 +1287,8 @@ static int64_t _chm_decompress_region(struct chmFile* h, uint8_t* buf, uint64_t 
 }
 
 /* retrieve (part of) an object */
-LONGINT64 chm_retrieve_object(struct chmFile* h, struct chmUnitInfo* ui, unsigned char* buf,
-                              LONGUINT64 addr, LONGINT64 len) {
+int64_t chm_retrieve_object(struct chmFile* h, struct chmUnitInfo* ui, unsigned char* buf,
+                              uint64_t addr, int64_t len) {
     /* must be valid file handle */
     if (h == NULL)
         return (int64_t)0;

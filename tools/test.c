@@ -7,17 +7,18 @@
  *                                                                         *
  ***************************************************************************/
 
+ #include "chm_lib.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "sha1.h"
-#include "chm_lib.h"
 
 #define UNUSED(x) (void) x
 
 static uint8_t* extract_file(struct chmFile* h, struct chmUnitInfo* ui) {
-    LONGINT64 len = (LONGINT64)ui->length;
+    int64_t len = (int64_t)ui->length;
 
     uint8_t* buf = (uint8_t*)malloc(len + 1);
     if (buf == NULL) {
@@ -25,7 +26,7 @@ static uint8_t* extract_file(struct chmFile* h, struct chmUnitInfo* ui) {
     }
     buf[len] = 0; /* null-terminate just in case */
 
-    LONGINT64 n = chm_retrieve_object(h, ui, buf, 0, len);
+    int64_t n = chm_retrieve_object(h, ui, buf, 0, len);
     if (n != len) {
         free(buf);
         return NULL;

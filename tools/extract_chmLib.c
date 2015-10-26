@@ -17,6 +17,7 @@
  ***************************************************************************/
 
 #include "chm_lib.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -88,7 +89,7 @@ static int rmkdir(char* path) {
  * callback function for enumerate API
  */
 static int _extract_callback(struct chmFile* h, struct chmUnitInfo* ui, void* context) {
-    LONGUINT64 ui_path_len;
+    uint64_t ui_path_len;
     char buffer[32768];
     struct extract_context* ctx = (struct extract_context*)context;
     char* i;
@@ -111,8 +112,8 @@ static int _extract_callback(struct chmFile* h, struct chmUnitInfo* ui, void* co
     /* Distinguish between files and dirs */
     if (ui->path[ui_path_len] != '/') {
         FILE* fout;
-        LONGINT64 len, remain = (LONGINT64)ui->length;
-        LONGUINT64 offset = 0;
+        int64_t len, remain = (int64_t)ui->length;
+        uint64_t offset = 0;
 
         printf("--> %s\n", ui->path);
         if ((fout = fopen(buffer, "wb")) == NULL) {
@@ -130,7 +131,7 @@ static int _extract_callback(struct chmFile* h, struct chmUnitInfo* ui, void* co
             len = chm_retrieve_object(h, ui, (unsigned char*)buffer, offset, 32768);
             if (len > 0) {
                 fwrite(buffer, 1, (size_t)len, fout);
-                offset += (LONGUINT64)len;
+                offset += (uint64_t)len;
                 remain -= len;
             } else {
                 fprintf(stderr, "incomplete file: %s\n", ui->path);
