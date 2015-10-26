@@ -34,10 +34,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __GNUC__
-#define memcpy __builtin_memcpy
-#endif
-
 /* sized types */
 typedef unsigned char UBYTE;  /* 8 bits exactly    */
 typedef unsigned short UWORD; /* 16 bits (or more) */

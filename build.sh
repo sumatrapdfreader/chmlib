@@ -15,12 +15,12 @@ set -o pipefail
 #CFLAGS=-DCHM_MT -DCHM_USE_PREAD -DCHM_USE_IO64 -g -DDMALLOC_DISABLE
 #LDFLAGS=-lpthread
 
-CC=clang
-CFLAGS="-g -fsanitize=address -O3 -Isrc -Wall"
 CHM_SRCS="src/chm_lib.c src/lzx.c"
 
 clang_rel()
 {
+  CC=clang
+  CFLAGS="-g -fsanitize=address -O3 -Isrc -Wall"
   OUT=obj/clang/rel
   mkdir -p $OUT
   $CC -o $OUT/test_chmLib $CFLAGS $CHM_SRCS tools/test_chmLib.c
@@ -32,6 +32,7 @@ clang_rel()
 
 clang_dbg()
 {
+  CC=clang
   CFLAGS="-g -fsanitize=address -O0 -Isrc -Wall"
   OUT=obj/clang/dbg
   mkdir -p $OUT
@@ -42,4 +43,19 @@ clang_dbg()
   $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
 
-clang_rel
+gcc_rel()
+{
+  #CC=/usr/local/opt/gcc/bin/gcc-5
+  CC=gcc-5 # this is on mac when installed with brew install gcc
+  CFLAGS="-g -O3 -Isrc -Wall"
+  OUT=obj/clang/rel
+  mkdir -p $OUT
+  $CC -o $OUT/test_chmLib $CFLAGS $CHM_SRCS tools/test_chmLib.c
+  $CC -o $OUT/extract_chmLib $CFLAGS $CHM_SRCS tools/extract_chmLib.c
+  $CC -o $OUT/enumdir_chmLib $CFLAGS $CHM_SRCS tools/enumdir_chmLib.c
+  $CC -o $OUT/enum_chmLib $CFLAGS $CHM_SRCS tools/enum_chmLib.c
+  $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
+}
+
+gcc_rel
+#clang_rel
