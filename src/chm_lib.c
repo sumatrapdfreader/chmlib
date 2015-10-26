@@ -70,15 +70,6 @@
 
 #define UNUSED(x) (void) x
 
-#ifdef WIN32
-#define CHM_NULL_FD INVALID_HANDLE_VALUE
-#define CHM_USE_WIN32IO 1
-#define CHM_CLOSE_FILE(fd) CloseHandle((fd))
-#else
-#define CHM_NULL_FD -1
-#define CHM_CLOSE_FILE(fd) close((fd))
-#endif
-
 /*
  * defines related to tuning
  */
@@ -498,6 +489,8 @@ static int _unmarshal_lzxc_control_data(unsigned char** pData, unsigned int* pDa
     return 1;
 }
 
+#define MAX_CACHE_BLOCKS 128
+
 /* the structure used for chm file handles */
 struct chmFile {
 #ifdef WIN32
@@ -529,44 +522,56 @@ struct chmFile {
     int lzx_last_block;
 
     /* cache for decompressed blocks */
-    uint8_t** cache_blocks;
-    uint64_t* cache_block_indices;
+    uint8_t* cache_blocks[MAX_CACHE_BLOCKS];
+    uint64_t cache_block_indices[MAX_CACHE_BLOCKS];
     int32_t cache_num_blocks;
 };
 
-/*
- * utility functions local to this module
- */
+#ifdef WIN32
+static void close_file(HANDLE h) {
+    if (h != INVALID_HANDLE_VALUE) {
+        CloseHandle(h);
+    }
+}
 
-/* utility function to handle differences between {pread,read}(64)? */
 static int64_t _chm_fetch_bytes(struct chmFile* h, uint8_t* buf, uint64_t os, int64_t len) {
     int64_t readLen = 0, oldOs = 0;
-    if (h->fd == CHM_NULL_FD)
+    if (h->fd == INVALID_HANDLE_VALUE)
         return readLen;
 
-#ifdef CHM_USE_WIN32IO
     /* NOTE: this might be better done with CreateFileMapping, et cetera... */
-    {
-        DWORD origOffsetLo = 0, origOffsetHi = 0;
-        DWORD offsetLo, offsetHi;
-        DWORD actualLen = 0;
+    DWORD origOffsetLo = 0, origOffsetHi = 0;
+    DWORD offsetLo, offsetHi;
+    DWORD actualLen = 0;
 
-        /* awkward Win32 Seek/Tell */
-        offsetLo = (unsigned int)(os & 0xffffffffL);
-        offsetHi = (unsigned int)((os >> 32) & 0xffffffffL);
-        origOffsetLo = SetFilePointer(h->fd, 0, &origOffsetHi, FILE_CURRENT);
-        offsetLo = SetFilePointer(h->fd, offsetLo, &offsetHi, FILE_BEGIN);
+    /* awkward Win32 Seek/Tell */
+    offsetLo = (unsigned int)(os & 0xffffffffL);
+    offsetHi = (unsigned int)((os >> 32) & 0xffffffffL);
+    origOffsetLo = SetFilePointer(h->fd, 0, &origOffsetHi, FILE_CURRENT);
+    offsetLo = SetFilePointer(h->fd, offsetLo, &offsetHi, FILE_BEGIN);
 
-        /* read the data */
-        if (ReadFile(h->fd, buf, (DWORD)len, &actualLen, NULL) == TRUE)
-            readLen = actualLen;
-        else
-            readLen = 0;
+    /* read the data */
+    if (ReadFile(h->fd, buf, (DWORD)len, &actualLen, NULL) == TRUE)
+        readLen = actualLen;
+    else
+        readLen = 0;
 
-        /* restore original position */
-        SetFilePointer(h->fd, origOffsetLo, &origOffsetHi, FILE_BEGIN);
-    }
+    /* restore original position */
+    SetFilePointer(h->fd, origOffsetLo, &origOffsetHi, FILE_BEGIN);
+    return readLen;
+}
 #else
+static void close_file(int fd) {
+    if (fd != -1) {
+        close(-1);
+    }
+}
+
+static int64_t _chm_fetch_bytes(struct chmFile* h, uint8_t* buf, uint64_t os, int64_t len) {
+    int64_t readLen = 0, oldOs = 0;
+    if (h->fd == -1)
+        return readLen;
+
 #ifdef CHM_USE_PREAD
 #ifdef CHM_USE_IO64
     readLen = pread64(h->fd, buf, (long)len, os);
@@ -586,9 +591,9 @@ static int64_t _chm_fetch_bytes(struct chmFile* h, uint8_t* buf, uint64_t os, in
     lseek(h->fd, (long)oldOs, SEEK_SET);
 #endif
 #endif
-#endif
     return readLen;
 }
+#endif
 
 /* open an ITS archive */
 #ifdef PPC_BSTR
@@ -610,32 +615,28 @@ struct chmFile* chm_open(const char* filename)
     struct chmLzxcControlData ctlData;
 
     /* allocate handle */
-    newHandle = (struct chmFile*)malloc(sizeof(struct chmFile));
+    newHandle = (struct chmFile*)calloc(1, sizeof(struct chmFile));
     if (newHandle == NULL)
         return NULL;
-    newHandle->fd = CHM_NULL_FD;
-    newHandle->lzx_state = NULL;
-    newHandle->cache_blocks = NULL;
-    newHandle->cache_block_indices = NULL;
-    newHandle->cache_num_blocks = 0;
 
 /* open file */
 #ifdef WIN32
 #ifdef PPC_BSTR
     if ((newHandle->fd = CreateFile(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
-                                    FILE_ATTRIBUTE_NORMAL, NULL)) == CHM_NULL_FD) {
+                                    FILE_ATTRIBUTE_NORMAL, NULL)) == INVALID_HANDLE_VALUE) {
         free(newHandle);
         return NULL;
     }
 #else
     if ((newHandle->fd = CreateFileA(filename, GENERIC_READ, 0, NULL, OPEN_EXISTING,
-                                     FILE_ATTRIBUTE_NORMAL, NULL)) == CHM_NULL_FD) {
+                                     FILE_ATTRIBUTE_NORMAL, NULL)) == INVALID_HANDLE_VALUE) {
         free(newHandle);
         return NULL;
     }
 #endif
 #else
-    if ((newHandle->fd = open(filename, O_RDONLY)) == CHM_NULL_FD) {
+    newHandle->fd = open(filename, O_RDONLY);
+    if (newHandle->fd == -1) {
         free(newHandle);
         return NULL;
     }
@@ -757,31 +758,18 @@ struct chmFile* chm_open(const char* filename)
 
 /* close an ITS archive */
 void chm_close(struct chmFile* h) {
-    if (h != NULL) {
-        if (h->fd != CHM_NULL_FD)
-            CHM_CLOSE_FILE(h->fd);
-        h->fd = CHM_NULL_FD;
-
-        if (h->lzx_state)
-            LZXteardown(h->lzx_state);
-        h->lzx_state = NULL;
-
-        if (h->cache_blocks) {
-            int i;
-            for (i = 0; i < h->cache_num_blocks; i++) {
-                if (h->cache_blocks[i])
-                    free(h->cache_blocks[i]);
-            }
-            free(h->cache_blocks);
-            h->cache_blocks = NULL;
-        }
-
-        if (h->cache_block_indices)
-            free(h->cache_block_indices);
-        h->cache_block_indices = NULL;
-
-        free(h);
+    if (h == NULL) {
+        return;
     }
+    close_file(h->fd);
+
+    if (h->lzx_state)
+        LZXteardown(h->lzx_state);
+
+    for (int i = 0; i < h->cache_num_blocks; i++) {
+        free(h->cache_blocks[i]);
+    }
+    free(h);
 }
 
 /*
@@ -794,43 +782,30 @@ void chm_set_cache_size(struct chmFile* h, int nCacheBlocks) {
     if (nCacheBlocks == h->cache_num_blocks) {
         return;
     }
-    uint8_t** newBlocks;
-    uint64_t* newIndices;
-    int i;
-
-    /* allocate new cached blocks */
-    newBlocks = (uint8_t**)calloc(nCacheBlocks, sizeof(uint8_t*));
-    if (newBlocks == NULL)
-        return;
-    newIndices = (uint64_t*)calloc(nCacheBlocks, sizeof(uint64_t));
-    if (newIndices == NULL) {
-        free(newBlocks);
-        return;
+    if (nCacheBlocks > MAX_CACHE_BLOCKS) {
+        nCacheBlocks = MAX_CACHE_BLOCKS;
     }
+    uint8_t* newBlocks[MAX_CACHE_BLOCKS];
+    uint64_t newIndices[MAX_CACHE_BLOCKS];
 
     /* re-distribute old cached blocks */
-    if (h->cache_blocks) {
-        for (i = 0; i < h->cache_num_blocks; i++) {
-            int newSlot = (int)(h->cache_block_indices[i] % nCacheBlocks);
+    for (int i = 0; i < h->cache_num_blocks; i++) {
+        int newSlot = (int)(h->cache_block_indices[i] % nCacheBlocks);
 
-            if (h->cache_blocks[i]) {
-                /* in case of collision, destroy newcomer */
-                if (newBlocks[newSlot]) {
-                    free(h->cache_blocks[i]);
-                    h->cache_blocks[i] = NULL;
-                } else {
-                    newBlocks[newSlot] = h->cache_blocks[i];
-                    newIndices[newSlot] = h->cache_block_indices[i];
-                }
+        if (h->cache_blocks[i]) {
+            /* in case of collision, destroy newcomer */
+            if (newBlocks[newSlot]) {
+                free(h->cache_blocks[i]);
+                h->cache_blocks[i] = NULL;
+            } else {
+                newBlocks[newSlot] = h->cache_blocks[i];
+                newIndices[newSlot] = h->cache_block_indices[i];
             }
         }
-
-        free(h->cache_blocks);
-        free(h->cache_block_indices);
     }
 
-    h->cache_blocks = newBlocks;
-    h->cache_block_indices = newIndices;
+    memcpy(h->cache_blocks, newBlocks, sizeof(newBlocks));
+    memcpy(h->cache_block_indices, newIndices, sizeof(newIndices));
     h->cache_num_blocks = nCacheBlocks;
 }
 
@@ -938,9 +913,6 @@ static uint8_t* _chm_find_in_PMGL(uint8_t* page_buf, uint32_t block_len, const c
 
 /* find which block should be searched next for the entry; -1 if no block */
 static int32_t _chm_find_in_PMGI(uint8_t* page_buf, uint32_t block_len, const char* objPath) {
-    /* XXX: modify this to do a binary search using the nice index structure
-     *      that is provided for us
-     */
     struct chmPmgiHeader header;
     unsigned int hremain;
     int page = -1;
@@ -978,10 +950,6 @@ static int32_t _chm_find_in_PMGI(uint8_t* page_buf, uint32_t block_len, const ch
 
 /* resolve a particular object from the archive */
 int chm_resolve_object(struct chmFile* h, const char* objPath, struct chmUnitInfo* ui) {
-    /*
-     * XXX: implement caching scheme for dir pages
-     */
-
     int32_t curPage;
 
     /* buffer to hold whatever page we're looking at */
