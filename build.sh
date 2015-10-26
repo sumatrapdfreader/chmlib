@@ -17,7 +17,7 @@ CHM_SRCS="src/chm_lib.c src/lzx.c"
 clang_rel()
 {
   CC=clang
-  CFLAGS="-g -fsanitize=address -O3 -Isrc -Weverything -Wno-sign-conversion -Wno-padded -Wno-sign-compare -Wno-conversion -Wno-missing-noreturn"
+  CFLAGS="-g -fsanitize=address -O0 -Isrc -Weverything -Wno-padded -Wno-conversion"
   OUT=obj/clang/rel
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
@@ -30,17 +30,17 @@ clang_rel_one()
 {
   CC=clang
   # ASAN only seems to work with -O0 (didn't trigger when I compiled with -O1, -O2 and -O3
-  #CFLAGS="-g -fsanitize=address -O0 -Isrc -Weverything -Wno-sign-conversion -Wno-padded -Wno-conversion -Wno-sign-compare"
-  CFLAGS="-g -fsanitize=address -O0 -Isrc -Weverything -Wno-sign-conversion -Wno-padded  -Wno-conversion -Wno-sign-compare"
+  CFLAGS="-g -fsanitize=address -O0 -Isrc -Weverything -Wno-padded -Wno-conversion"
   OUT=obj/clang/rel
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
+  $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
 
 clang_dbg()
 {
   CC=clang
-  CFLAGS="-g -fsanitize=address -O0 -Isrc -Wall"
+  CFLAGS="-g -fsanitize=address -O0 -Isrc -Weverything -Wno-padded -Wno-conversion"
   OUT=obj/clang/dbg
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c

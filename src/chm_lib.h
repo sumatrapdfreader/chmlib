@@ -64,8 +64,8 @@ struct chmFile;
 /* structure representing an element from an ITS file stream   */
 #define CHM_MAX_PATHLEN 512
 struct chmUnitInfo {
-    uint64_t start;
-    uint64_t length;
+    int64_t start;
+    int64_t length;
     int space;
     int flags;
     char path[CHM_MAX_PATHLEN + 1];
@@ -90,7 +90,7 @@ int chm_resolve_object(struct chmFile* h, const char* objPath, struct chmUnitInf
 
 /* retrieve part of an object from the archive */
 int64_t chm_retrieve_object(struct chmFile* h, struct chmUnitInfo* ui, unsigned char* buf,
-                            uint64_t addr, int64_t len);
+                            int64_t addr, int64_t len);
 
 /* enumerate the objects in the .chm archive */
 typedef int (*CHM_ENUMERATOR)(struct chmFile* h, struct chmUnitInfo* ui, void* context);
@@ -109,9 +109,9 @@ int chm_enumerate(struct chmFile* h, int what, CHM_ENUMERATOR e, void* context);
 
 typedef struct chm_entry {
     struct chm_entry* next;
-    uint64_t start;
-    uint64_t length;
     char* path;
+    int64_t start;
+    int64_t length;
     int space;
     int flags;
 } chm_entry;

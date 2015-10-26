@@ -12,7 +12,7 @@
  *              It is not included with the expectation that it will be of *
  *              use to others; nor is it included as an example of a       *
  *              stunningly good implementation of an HTTP server.  It is,  *
- *              in fact, probably badly broken for any serious usage.      *
+j *              in fact, probably badly broken for any serious usage.      *
  *                                                                         *
  *              Nevertheless, it is another example program, and it does   *
  *              serve a purpose for me, so I've included it as well.       *
@@ -56,15 +56,16 @@ static void usage(const char* argv0) {
 #else
     fprintf(stderr, "usage: %s [--port=PORT] [--bind=IP] <filename>\n", argv0);
 #endif
-    exit(1);
 }
 
 static void chmhttp_server(const char* filename);
 
 int main(int c, char** v) {
 #ifdef CHM_HTTP_SIMPLE
-    if (c < 2)
+    if (c < 2) {
         usage(v[0]);
+        return 1;
+    }
 
     /* run the server */
     chmhttp_server(v[1]);
@@ -225,12 +226,10 @@ static struct mime_mapping mime_types[] = {{".htm", "text/html"},
                                            {".png", "image/png"}};
 
 static const char* lookup_mime(const char* ext) {
-    int i;
-    if (ext != NULL) {
-        for (i = 0; i < sizeof(mime_types) / sizeof(struct mime_mapping); i++) {
-            if (strcasecmp(mime_types[i].ext, ext) == 0)
-                return mime_types[i].ctype;
-        }
+    size_t nTypes = sizeof(mime_types) / sizeof(struct mime_mapping);
+    for (size_t i = 0; ext && i < nTypes; i++) {
+        if (strcasecmp(mime_types[i].ext, ext) == 0)
+            return mime_types[i].ctype;
     }
 
     return "application/octet-stream";
@@ -295,7 +294,7 @@ static void deliver_content(FILE* fout, const char* filename, struct chmFile* fi
     offset = 0;
     while (offset < ui.length) {
         if ((ui.length - offset) < 65536)
-            swath = ui.length - offset;
+            swath = (int)ui.length - offset;
         else
             swath = 65536;
         swath = (int)chm_retrieve_object(file, &ui, buffer, offset, swath);
