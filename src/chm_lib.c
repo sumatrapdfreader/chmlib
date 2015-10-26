@@ -69,6 +69,8 @@
 #include "chm_lib.h"
 #include "lzx.h"
 
+#define UNUSED(x) (void) x
+
 #ifdef WIN32
 #define CHM_NULL_FD INVALID_HANDLE_VALUE
 #define CHM_USE_WIN32IO 1
@@ -617,7 +619,6 @@ static int64_t _chm_fetch_bytes(struct chmFile* h, uint8_t* buf, uint64_t os, in
 
 /* open an ITS archive */
 #ifdef PPC_BSTR
-/* RWE 6/12/2003 */
 struct chmFile* chm_open(BSTR filename)
 #else
 struct chmFile* chm_open(const char* filename)
@@ -1038,7 +1039,6 @@ int chm_resolve_object(struct chmFile* h, const char* objPath, struct chmUnitInf
     int32_t curPage;
 
     /* buffer to hold whatever page we're looking at */
-    /* RWE 6/12/2003 */
     uint8_t* page_buf = malloc(h->block_len);
     if (page_buf == NULL)
         return CHM_RESOLVE_FAILURE;
@@ -1427,5 +1427,12 @@ int chm_enumerate(struct chmFile* h, int what, CHM_ENUMERATOR e, void* context) 
     }
 
     free(page_buf);
+    return 1;
+}
+
+int chm_parse(struct chmFile* h, int* nEntries, chm_entry** entries) {
+    UNUSED(h);
+    UNUSED(nEntries);
+    UNUSED(entries);
     return 1;
 }

@@ -73,7 +73,6 @@ struct chmUnitInfo {
 
 /* open an ITS archive */
 #ifdef PPC_BSTR
-/* RWE 6/12/2003 */
 struct chmFile* chm_open(BSTR filename);
 #else
 struct chmFile* chm_open(const char* filename);
@@ -107,6 +106,19 @@ typedef int (*CHM_ENUMERATOR)(struct chmFile* h, struct chmUnitInfo* ui, void* c
 #define CHM_ENUMERATOR_CONTINUE 1
 #define CHM_ENUMERATOR_SUCCESS 2
 int chm_enumerate(struct chmFile* h, int what, CHM_ENUMERATOR e, void* context);
+
+/* new API */
+
+typedef struct chm_entry {
+    struct chm_entry* next;
+    uint64_t start;
+    uint64_t length;
+    char* path;
+    int space;
+    int flags;
+} chm_entry;
+
+int chm_parse(struct chmFile* h, int* nEntries, chm_entry** entries);
 
 #ifdef __cplusplus
 }
