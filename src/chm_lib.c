@@ -141,32 +141,6 @@ static int _unmarshal_uchar_array(unsigned char** pData, unsigned int* pLenRemai
     return 1;
 }
 
-#if 0
-static int _unmarshal_int16(unsigned char **pData,
-                            unsigned int *pLenRemain,
-                            int16_t *dest)
-{
-    if (2 > *pLenRemain)
-        return 0;
-    *dest = (*pData)[0] | (*pData)[1]<<8;
-    *pData += 2;
-    *pLenRemain -= 2;
-    return 1;
-}
-
-static int _unmarshal_uint16(unsigned char **pData,
-                             unsigned int *pLenRemain,
-                             uint16_t *dest)
-{
-    if (2 > *pLenRemain)
-        return 0;
-    *dest = (*pData)[0] | (*pData)[1]<<8;
-    *pData += 2;
-    *pLenRemain -= 2;
-    return 1;
-}
-#endif
-
 static int _unmarshal_int32(unsigned char** pData, unsigned int* pLenRemain, int32_t* dest) {
     if (4 > *pLenRemain)
         return 0;
@@ -771,16 +745,8 @@ struct chmFile* chm_open(const char* filename)
             newHandle->window_size = ctlData.windowSize;
             newHandle->reset_interval = ctlData.resetInterval;
 
-/* Jed, Mon Jun 28: Experimentally, it appears that the reset block count */
-/*       must be multiplied by this formerly unknown ctrl data field in   */
-/*       order to decompress some files.                                  */
-#if 0
-        newHandle->reset_blkcount = newHandle->reset_interval /
-                    (newHandle->window_size / 2);
-#else
             newHandle->reset_blkcount =
                 newHandle->reset_interval / (newHandle->window_size / 2) * ctlData.windowsPerReset;
-#endif
         }
     }
 
