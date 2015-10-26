@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,8 +13,31 @@ import (
 )
 
 var (
-	testExe = "obj/clang/rel/test"
+	testExe   = "obj/clang/rel/test"
+	seenFiles map[string]bool
 )
+
+func init() {
+	seenFiles = make(map[string]bool)
+}
+
+func seenSha1(sha1Hex string) bool {
+	seen := seenFiles[sha1Hex]
+	if seen {
+		return true
+	}
+	seenFiles[sha1Hex] = true
+	return false
+}
+
+func fileSha1Hex(path string) (string, error) {
+	d, err := ioutil.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	sha1 := sha1.Sum(d)
+	return fmt.Sprintf("%x", sha1[:]), nil
+}
 
 func fileExists(path string) bool {
 	fi, err := os.Stat(path)
@@ -46,6 +71,36 @@ func runTest(path string) ([]byte, []byte, error) {
 	return stdout.Bytes(), stderr.Bytes(), err
 }
 
+func testFile(path string) error {
+	sha1Hex, err := fileSha1Hex(path)
+	if err != nil {
+		return err
+	}
+	if seenSha1(sha1Hex) {
+		return nil
+	}
+
+	fmt.Printf("File: %s\n", sha1Hex)
+	stdout, stderr, err := runTest(path)
+	if err != nil {
+		fmt.Printf("failed with '%s' on '%s'\n", err, path)
+		if len(stdout) != 0 {
+			fmt.Printf("stdout:\n'%s'\n", stdout)
+		}
+		if len(stderr) != 0 {
+			fmt.Printf("stderr:\n'%s'\n", stderr)
+		}
+		return errors.New("stoped because test failed on file")
+	}
+	if len(stdout) != 0 {
+		fmt.Printf("%s\n", stdout)
+	}
+	if len(stderr) != 0 {
+		fmt.Printf("stderr:\n'%s'\n", stderr)
+	}
+	return nil
+}
+
 func testDir(dir string) {
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -57,25 +112,7 @@ func testDir(dir string) {
 		if info.IsDir() || !info.Mode().IsRegular() || !isChm(path) {
 			return nil
 		}
-		fmt.Printf("%s\n", path)
-		stdout, stderr, err := runTest(path)
-		if err != nil {
-			fmt.Printf("failed with '%s' on '%s'\n", err, path)
-			if len(stdout) != 0 {
-				fmt.Printf("stdout:\n'%s'\n", stdout)
-			}
-			if len(stderr) != 0 {
-				fmt.Printf("stderr:\n'%s'\n", stderr)
-			}
-			return errors.New("stoped because test failed on file")
-		}
-		if len(stdout) != 0 {
-			fmt.Printf("%s\n", stdout)
-		}
-		if len(stderr) != 0 {
-			fmt.Printf("stderr:\n'%s'\n", stderr)
-		}
-		return nil
+		return testFile(path)
 	})
 }
 
