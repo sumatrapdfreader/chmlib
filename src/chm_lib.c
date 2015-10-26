@@ -1,4 +1,3 @@
-/* $Id: chm_lib.c,v 1.19 2003/09/07 13:01:43 jedwin Exp $ */
 /***************************************************************************
  *             chm_lib.c - CHM archive manipulation routines               *
  *                           -------------------                           *
@@ -785,8 +784,7 @@ struct chmFile* chm_open(const char* filename)
         }
     }
 
-    /* initialize cache */
-    chm_set_param(newHandle, CHM_PARAM_MAX_BLOCKS_CACHED, CHM_MAX_BLOCKS_CACHED);
+    chm_set_cache_size(newHandle, CHM_MAX_BLOCKS_CACHED);
 
     return newHandle;
 }
@@ -821,77 +819,59 @@ void chm_close(struct chmFile* h) {
 }
 
 /*
- * set a parameter on the file handle.
- * valid parameter types:
- *          CHM_PARAM_MAX_BLOCKS_CACHED:
- *                 how many decompressed blocks should be cached?  A simple
- *                 caching scheme is used, wherein the index of the block is
- *                 used as a hash value, and hash collision results in the
- *                 invalidation of the previously cached block.
+ *  how many decompressed blocks should be cached?  A simple
+ *  caching scheme is used, wherein the index of the block is
+ *  used as a hash value, and hash collision results in the
+ *  invalidation of the previously cached block.
  */
-void chm_set_param(struct chmFile* h, int paramType, int paramVal) {
-    switch (paramType) {
-        case CHM_PARAM_MAX_BLOCKS_CACHED:
-            if (paramVal != h->cache_num_blocks) {
-                uint8_t** newBlocks;
-                uint64_t* newIndices;
-                int i;
-
-                /* allocate new cached blocks */
-                newBlocks = (uint8_t**)malloc(paramVal * sizeof(uint8_t*));
-                if (newBlocks == NULL)
-                    return;
-                newIndices = (uint64_t*)malloc(paramVal * sizeof(uint64_t));
-                if (newIndices == NULL) {
-                    free(newBlocks);
-                    return;
-                }
-                for (i = 0; i < paramVal; i++) {
-                    newBlocks[i] = NULL;
-                    newIndices[i] = 0;
-                }
-
-                /* re-distribute old cached blocks */
-                if (h->cache_blocks) {
-                    for (i = 0; i < h->cache_num_blocks; i++) {
-                        int newSlot = (int)(h->cache_block_indices[i] % paramVal);
-
-                        if (h->cache_blocks[i]) {
-                            /* in case of collision, destroy newcomer */
-                            if (newBlocks[newSlot]) {
-                                free(h->cache_blocks[i]);
-                                h->cache_blocks[i] = NULL;
-                            } else {
-                                newBlocks[newSlot] = h->cache_blocks[i];
-                                newIndices[newSlot] = h->cache_block_indices[i];
-                            }
-                        }
-                    }
-
-                    free(h->cache_blocks);
-                    free(h->cache_block_indices);
-                }
-
-                /* now, set new values */
-                h->cache_blocks = newBlocks;
-                h->cache_block_indices = newIndices;
-                h->cache_num_blocks = paramVal;
-            }
-            break;
-
-        default:
-            break;
+void chm_set_cache_size(struct chmFile* h, int nCacheBlocks) {
+    if (nCacheBlocks == h->cache_num_blocks) {
+        return;
     }
-}
+    uint8_t** newBlocks;
+    uint64_t* newIndices;
+    int i;
 
-/*
- * helper methods for chm_resolve_object
- */
+    /* allocate new cached blocks */
+    newBlocks = (uint8_t**)calloc(nCacheBlocks, sizeof(uint8_t*));
+    if (newBlocks == NULL)
+        return;
+    newIndices = (uint64_t*)calloc(nCacheBlocks, sizeof(uint64_t));
+    if (newIndices == NULL) {
+        free(newBlocks);
+        return;
+    }
+
+    /* re-distribute old cached blocks */
+    if (h->cache_blocks) {
+        for (i = 0; i < h->cache_num_blocks; i++) {
+            int newSlot = (int)(h->cache_block_indices[i] % nCacheBlocks);
+
+            if (h->cache_blocks[i]) {
+                /* in case of collision, destroy newcomer */
+                if (newBlocks[newSlot]) {
+                    free(h->cache_blocks[i]);
+                    h->cache_blocks[i] = NULL;
+                } else {
+                    newBlocks[newSlot] = h->cache_blocks[i];
+                    newIndices[newSlot] = h->cache_block_indices[i];
+                }
+            }
+        }
+
+        free(h->cache_blocks);
+        free(h->cache_block_indices);
+    }
+
+    h->cache_blocks = newBlocks;
+    h->cache_block_indices = newIndices;
+    h->cache_num_blocks = nCacheBlocks;
+}
 
 /* skip a compressed dword */
 static void _chm_skip_cword(uint8_t** pEntry) {
-    while (*(*pEntry)++ >= 0x80)
-        ;
+    while (*(*pEntry)++ >= 0x80) {
+    }
 }
 
 /* skip the data from a PMGL entry */

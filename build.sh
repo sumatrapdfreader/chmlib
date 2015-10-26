@@ -63,5 +63,5 @@ gcc_rel()
 }
 
 #gcc_rel
-clang_rel_one
-#clang_rel
+#clang_rel_one
+clang_rel
