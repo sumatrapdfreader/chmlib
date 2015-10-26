@@ -22,90 +22,76 @@
 #include <sys/types.h>
 #endif
 
-#define UNUSED(x) (void)x
+#define UNUSED(x) (void) x
 
-static int enum_cb(struct chmFile* h, struct chmUnitInfo* ui, void* ctx) {
-  static char buf[128] = { 0 };
+/* TODO: actually collect all data */
+static uint8_t* extract_file(struct chmFile* h, struct chmUnitInfo* ui) {
+    uint8_t buf[32 * 1024];
 
-  UNUSED(h);
-  UNUSED(ctx);
+    LONGINT64 len, remain = (LONGINT64)ui->length;
+    LONGUINT64 offset = 0;
 
-  if (ui->flags & CHM_ENUMERATE_NORMAL)
-      strcpy(buf, "normal ");
-  else if (ui->flags & CHM_ENUMERATE_SPECIAL)
-      strcpy(buf, "special ");
-  else if (ui->flags & CHM_ENUMERATE_META)
-      strcpy(buf, "meta ");
+    while (remain != 0) {
+        len = chm_retrieve_object(h, ui, buf, offset, sizeof(buf));
+        if (len > 0) {
+            offset += (LONGUINT64)len;
+            remain -= len;
+        } else {
+            return NULL;
+        }
+    }
 
-  if (ui->flags & CHM_ENUMERATE_DIRS)
-      strcat(buf, "dir");
-  else if (ui->flags & CHM_ENUMERATE_FILES)
-      strcat(buf, "file");
+    if (remain < 0) {
+        return NULL;
+    }
 
-  printf("   %1d %8d %8d   %s\t\t%s\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
-         ui->path);
-  return CHM_ENUMERATOR_CONTINUE;
+    return NULL;
 }
 
-#if 0
-    LONGUINT64 ui_path_len;
-    char buffer[32768];
-    struct extract_context* ctx = (struct extract_context*)context;
-    char* i;
+/* return 1 if path ends with '/' */
+static int is_dir(const char* path) {
+    size_t n = strlen(path) - 1;
+    return path[n] == '/';
+}
 
-    if (ui->path[0] != '/')
-        return CHM_ENUMERATOR_CONTINUE;
+static int enum_cb(struct chmFile* h, struct chmUnitInfo* ui, void* ctx) {
+    static char buf[128] = {0};
 
-    /* quick hack for security hole mentioned by Sven Tantau */
-    if (strstr(ui->path, "/../") != NULL) {
-        /* fprintf(stderr, "Not extracting %s (dangerous path)\n", ui->path); */
+    UNUSED(h);
+    UNUSED(ctx);
+
+    int isFile = ui->flags & CHM_ENUMERATE_FILES;
+
+    if (ui->flags & CHM_ENUMERATE_NORMAL)
+        strcpy(buf, "normal ");
+    else if (ui->flags & CHM_ENUMERATE_SPECIAL)
+        strcpy(buf, "special ");
+    else if (ui->flags & CHM_ENUMERATE_META)
+        strcpy(buf, "meta ");
+
+    if (ui->flags & CHM_ENUMERATE_DIRS)
+        strcat(buf, "dir");
+    else if (isFile)
+        strcat(buf, "file");
+
+    printf("   %1d %8d %8d   %s\t\t%s\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
+           ui->path);
+
+    if (ui->length == 0 || !isFile) {
         return CHM_ENUMERATOR_CONTINUE;
     }
 
-    if (snprintf(buffer, sizeof(buffer), "%s%s", ctx->base_path, ui->path) > 1024)
-        return CHM_ENUMERATOR_FAILURE;
-
-    /* Get the length of the path */
-    ui_path_len = strlen(ui->path) - 1;
-
-    /* Distinguish between files and dirs */
-    if (ui->path[ui_path_len] != '/') {
-        FILE* fout;
-        LONGINT64 len, remain = (LONGINT64)ui->length;
-        LONGUINT64 offset = 0;
-
-        printf("--> %s\n", ui->path);
-        if ((fout = fopen(buffer, "wb")) == NULL) {
-            /* make sure that it isn't just a missing directory before we abort */
-            char newbuf[32768];
-            strcpy(newbuf, buffer);
-            i = strrchr(newbuf, '/');
-            *i = '\0';
-            rmkdir(newbuf);
-            if ((fout = fopen(buffer, "wb")) == NULL)
-                return CHM_ENUMERATOR_FAILURE;
-        }
-
-        while (remain != 0) {
-            len = chm_retrieve_object(h, ui, (unsigned char*)buffer, offset, 32768);
-            if (len > 0) {
-                fwrite(buffer, 1, (size_t)len, fout);
-                offset += (LONGUINT64)len;
-                remain -= len;
-            } else {
-                fprintf(stderr, "incomplete file: %s\n", ui->path);
-                break;
-            }
-        }
-
-        fclose(fout);
-    } else {
-        if (rmkdir(buffer) == -1)
-            return CHM_ENUMERATOR_FAILURE;
+    /* this should be redundant to isFile, but better be safe than sorry */
+    if (is_dir(ui->path)) {
+        return CHM_ENUMERATOR_CONTINUE;
     }
+
+    uint8_t* d = extract_file(h, ui);
+    /* TODO: calculate and print sha1 */
+    free(d);
 
     return CHM_ENUMERATOR_CONTINUE;
-#endif
+}
 
 int main(int c, char** v) {
     struct chmFile* h;
@@ -125,7 +111,7 @@ int main(int c, char** v) {
     printf(" ===    =====   ======   ====\t\t\t====\n");
 
     if (!chm_enumerate(h, CHM_ENUMERATE_ALL, enum_cb, NULL)) {
-      printf("   *** ERROR ***\n");
+        printf("   *** ERROR ***\n");
     }
 
     chm_close(h);
