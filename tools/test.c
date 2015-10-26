@@ -47,9 +47,26 @@ static int needs_csv_escaping(const char* s) {
     return *s == ',';
 }
 
+static char hex_char(int n) {
+  static const char *s = "0123456789ABCDEF";
+  return s[n];
+}
+
+static void sha1_to_hex(uint8_t *sha1, char *sha1Hex) {
+  for (int i = 0; i < 20; i++) {
+    uint8_t c = sha1[i];
+    int n = (c >> 4) & 0xf;
+    sha1Hex[i*2] = hex_char(n);
+    n = c & 0xf;
+    sha1Hex[(i*2)+1] = hex_char(n);
+  }
+}
+
 static int enum_cb(struct chmFile* h, struct chmUnitInfo* ui, void* ctx) {
     UNUSED(ctx);
     char buf[128] = {0};
+    uint8_t sha1[20] = {0};
+    char sha1Hex[41] = {0};
 
     int isFile = ui->flags & CHM_ENUMERATE_FILES;
 
@@ -63,12 +80,24 @@ static int enum_cb(struct chmFile* h, struct chmUnitInfo* ui, void* ctx) {
     else if (isFile)
         strcat(buf, "file");
 
-    /* TODO: calculate and print sha1 */
+
+    if (ui->length > 0) {
+      uint8_t* d = extract_file(h, ui);
+      if (d != NULL) {
+        int err = sha1_process_all(d, ui->length, sha1);
+        free(d);
+        if (err != CRYPT_OK) {
+          return CHM_ENUMERATOR_FAILURE;
+        }
+      }
+    }
+
+    sha1_to_hex(sha1, sha1Hex);
     if (needs_csv_escaping(ui->path)) {
-        printf("%d,%d,%d,%s,\"%s\"\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
-               ui->path);
+        printf("%d,%d,%d,%s,%s,\"%s\"\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
+               sha1Hex, ui->path);
     } else {
-        printf("%1d,%d,%d,%s,%s\n", (int)ui->space, (int)ui->start, (int)ui->length, buf, ui->path);
+        printf("%1d,%d,%d,%s,%s,%s\n", (int)ui->space, (int)ui->start, (int)ui->length, buf, sha1Hex, ui->path);
     }
 
     if (ui->length == 0 || !isFile) {
@@ -79,9 +108,6 @@ static int enum_cb(struct chmFile* h, struct chmUnitInfo* ui, void* ctx) {
     if (is_dir(ui->path)) {
         return CHM_ENUMERATOR_CONTINUE;
     }
-
-    uint8_t* d = extract_file(h, ui);
-    free(d);
 
     return CHM_ENUMERATOR_CONTINUE;
 }
