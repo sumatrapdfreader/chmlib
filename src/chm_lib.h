@@ -89,8 +89,8 @@ void chm_set_cache_size(struct chm_file* h, int nCacheBlocks);
 int chm_resolve_object(struct chm_file* h, const char* objPath, chm_unit_info* ui);
 
 /* retrieve part of an object from the archive */
-int64_t chm_retrieve_object(struct chm_file* h, chm_unit_info* ui, unsigned char* buf,
-                            int64_t addr, int64_t len);
+int64_t chm_retrieve_object(struct chm_file* h, chm_unit_info* ui, unsigned char* buf, int64_t addr,
+                            int64_t len);
 
 /* enumerate the objects in the .chm archive */
 typedef int (*CHM_ENUMERATOR)(struct chm_file* h, chm_unit_info* ui, void* context);

@@ -123,7 +123,7 @@ static void test_asan_1(int off) {
 #endif
 
 int main(int c, char** v) {
-    struct  chm_file* h;
+    struct chm_file* h;
 
     if (c < 2) {
         fprintf(stderr, "usage: %s <chmfile>\n", v[0]);

@@ -645,7 +645,7 @@ static void close_file(HANDLE h) {
     }
 }
 
-static int64_t _chm_fetch_bytes(chm_file* h, uint8_t* buf, int64_t os, int64_t len) {
+static int64_t read_bytes(chm_file* h, uint8_t* buf, int64_t os, int64_t len) {
     int64_t readLen = 0, oldOs = 0;
     if (h->fd == INVALID_HANDLE_VALUE)
         return readLen;
@@ -678,7 +678,7 @@ static void close_file(int fd) {
     }
 }
 
-static int64_t _chm_fetch_bytes(chm_file* h, uint8_t* buf, int64_t os, int64_t len) {
+static int64_t read_bytes(chm_file* h, uint8_t* buf, int64_t os, int64_t len) {
     int64_t readLen = 0, oldOs = 0;
     if (h->fd == -1)
         return readLen;
@@ -753,7 +753,7 @@ chm_file* chm_open(const char* filename)
 
     /* read and verify header */
     n = CHM_ITSF_V3_LEN;
-    if (_chm_fetch_bytes(h, buf, 0, n) != n) {
+    if (read_bytes(h, buf, 0, n) != n) {
         goto Error;
     }
 
@@ -770,7 +770,7 @@ chm_file* chm_open(const char* filename)
 
     /* now, read and verify the directory header chunk */
     n = CHM_ITSP_V1_LEN;
-    if (_chm_fetch_bytes(h, buf, (int64_t)itsfHeader.dir_offset, n) != n) {
+    if (read_bytes(h, buf, (int64_t)itsfHeader.dir_offset, n) != n) {
         goto Error;
     }
     unmarshaller_init(&u, (uint8_t*)buf, n);
@@ -894,25 +894,24 @@ void chm_set_cache_size(chm_file* h, int nCacheBlocks) {
     h->cache_num_blocks = nCacheBlocks;
 }
 
-
-static uint8_t *get_cached_block(chm_file *h, int64_t nBlock) {
-  int idx = (int)nBlock % h->cache_num_blocks;
-  if (h->cache_blocks[idx] != NULL && h->cache_block_indices[idx] == nBlock) {
-    return h->cache_blocks[idx];
-  }
-  return NULL;
+static uint8_t* get_cached_block(chm_file* h, int64_t nBlock) {
+    int idx = (int)nBlock % h->cache_num_blocks;
+    if (h->cache_blocks[idx] != NULL && h->cache_block_indices[idx] == nBlock) {
+        return h->cache_blocks[idx];
+    }
+    return NULL;
 }
 
-static uint8_t *alloc_cached_block(chm_file *h, int64_t nBlock) {
-  int idx = (int)(nBlock % h->cache_num_blocks);
-  if (!h->cache_blocks[idx]) {
-    size_t blockSize = h->reset_table.block_len;
-    h->cache_blocks[idx] = (uint8_t*)malloc(blockSize);
-  }
-  if (h->cache_blocks[idx]) {
-    h->cache_block_indices[idx] = nBlock;
-  }
-  return h->cache_blocks[idx];
+static uint8_t* alloc_cached_block(chm_file* h, int64_t nBlock) {
+    int idx = (int)(nBlock % h->cache_num_blocks);
+    if (!h->cache_blocks[idx]) {
+        size_t blockSize = h->reset_table.block_len;
+        h->cache_blocks[idx] = (uint8_t*)malloc(blockSize);
+    }
+    if (h->cache_blocks[idx]) {
+        h->cache_block_indices[idx] = nBlock;
+    }
+    return h->cache_blocks[idx];
 }
 
 /* skip a compressed dword */
@@ -1105,7 +1104,7 @@ int chm_resolve_object(chm_file* h, const char* objPath, chm_unit_info* ui) {
     while (curPage != -1) {
         /* try to fetch the index page */
         int64_t n = h->block_len;
-        if (_chm_fetch_bytes(h, page_buf, (int64_t)h->dir_offset + (int64_t)curPage * n, n) != n) {
+        if (read_bytes(h, page_buf, (int64_t)h->dir_offset + (int64_t)curPage * n, n) != n) {
             free(page_buf);
             return CHM_RESOLVE_FAILURE;
         }
@@ -1145,8 +1144,7 @@ int chm_resolve_object(chm_file* h, const char* objPath, chm_unit_info* ui) {
  */
 
 /* get the bounds of a compressed block.  return 0 on failure */
-static int _chm_get_cmpblock_bounds(chm_file* h, int64_t block, int64_t* start,
-                                    int64_t* len) {
+static int _chm_get_cmpblock_bounds(chm_file* h, int64_t block, int64_t* start, int64_t* len) {
     uint8_t buffer[8], *dummy;
     unsigned int remain;
 
@@ -1155,20 +1153,18 @@ static int _chm_get_cmpblock_bounds(chm_file* h, int64_t block, int64_t* start,
         /* unpack the start address */
         dummy = buffer;
         remain = 8;
-        if (_chm_fetch_bytes(h, buffer,
-                             (int64_t)h->data_offset + (int64_t)h->rt_unit.start +
-                                 (int64_t)h->reset_table.table_offset + (int64_t)block * 8,
-                             remain) != remain ||
+        if (read_bytes(h, buffer, (int64_t)h->data_offset + (int64_t)h->rt_unit.start +
+                                      (int64_t)h->reset_table.table_offset + (int64_t)block * 8,
+                       remain) != remain ||
             !_unmarshal_uint64(&dummy, &remain, start))
             return 0;
 
         /* unpack the end address */
         dummy = buffer;
         remain = 8;
-        if (_chm_fetch_bytes(h, buffer,
-                             (int64_t)h->data_offset + (int64_t)h->rt_unit.start +
-                                 (int64_t)h->reset_table.table_offset + (int64_t)block * 8 + 8,
-                             remain) != remain ||
+        if (read_bytes(h, buffer, (int64_t)h->data_offset + (int64_t)h->rt_unit.start +
+                                      (int64_t)h->reset_table.table_offset + (int64_t)block * 8 + 8,
+                       remain) != remain ||
             !_unmarshal_int64(&dummy, &remain, len))
             return 0;
     }
@@ -1178,10 +1174,9 @@ static int _chm_get_cmpblock_bounds(chm_file* h, int64_t block, int64_t* start,
         /* unpack the start address */
         dummy = buffer;
         remain = 8;
-        if (_chm_fetch_bytes(h, buffer,
-                             (int64_t)h->data_offset + (int64_t)h->rt_unit.start +
-                                 (int64_t)h->reset_table.table_offset + (int64_t)block * 8,
-                             remain) != remain ||
+        if (read_bytes(h, buffer, (int64_t)h->data_offset + (int64_t)h->rt_unit.start +
+                                      (int64_t)h->reset_table.table_offset + (int64_t)block * 8,
+                       remain) != remain ||
             !_unmarshal_uint64(&dummy, &remain, start))
             return 0;
 
@@ -1226,17 +1221,17 @@ static int64_t _chm_decompress_block(chm_file* h, int64_t block, uint8_t** ubuff
 
                 lbuffer = alloc_cached_block(h, curBlockIdx);
                 if (!lbuffer) {
-                  free(cbuffer);
-                  return -1;
+                    free(cbuffer);
+                    return -1;
                 }
 
                 /* decompress the previous block */
                 dbgprintf("Decompressing block #%4d (EXTRA)\n", curBlockIdx);
                 if (!_chm_get_cmpblock_bounds(h, curBlockIdx, &cmpStart, &cmpLen) || cmpLen < 0 ||
                     cmpLen > (int64_t)blockSize + 6144 ||
-                    _chm_fetch_bytes(h, cbuffer, cmpStart, cmpLen) != cmpLen ||
-                    LZXdecompress(h->lzx_state, cbuffer, lbuffer, (int)cmpLen,
-                                  (int)blockSize) != DECR_OK) {
+                    read_bytes(h, cbuffer, cmpStart, cmpLen) != cmpLen ||
+                    LZXdecompress(h->lzx_state, cbuffer, lbuffer, (int)cmpLen, (int)blockSize) !=
+                        DECR_OK) {
                     dbgprintf("   (DECOMPRESS FAILED!)\n");
                     free(cbuffer);
                     return (int64_t)0;
@@ -1254,8 +1249,8 @@ static int64_t _chm_decompress_block(chm_file* h, int64_t block, uint8_t** ubuff
 
     lbuffer = alloc_cached_block(h, block);
     if (!lbuffer) {
-      free(cbuffer);
-      return -1;
+        free(cbuffer);
+        return -1;
     }
 
     *ubuffer = lbuffer;
@@ -1263,9 +1258,8 @@ static int64_t _chm_decompress_block(chm_file* h, int64_t block, uint8_t** ubuff
     /* decompress the block we actually want */
     dbgprintf("Decompressing block #%4d (REAL )\n", (int)block);
     if (!_chm_get_cmpblock_bounds(h, block, &cmpStart, &cmpLen) ||
-        _chm_fetch_bytes(h, cbuffer, cmpStart, cmpLen) != cmpLen ||
-        LZXdecompress(h->lzx_state, cbuffer, lbuffer, (int)cmpLen, (int)blockSize) !=
-            DECR_OK) {
+        read_bytes(h, cbuffer, cmpStart, cmpLen) != cmpLen ||
+        LZXdecompress(h->lzx_state, cbuffer, lbuffer, (int)cmpLen, (int)blockSize) != DECR_OK) {
         dbgprintf("   (DECOMPRESS FAILED!)\n");
         free(cbuffer);
         return (int64_t)0;
@@ -1293,7 +1287,7 @@ static int64_t _chm_decompress_region(chm_file* h, uint8_t* buf, int64_t start, 
     if (nLen > (h->reset_table.block_len - nOffset))
         nLen = h->reset_table.block_len - nOffset;
 
-    uint8_t *cached_block = get_cached_block(h, nBlock);
+    uint8_t* cached_block = get_cached_block(h, nBlock);
     if (cached_block != NULL) {
         memcpy(buf, cached_block + nOffset, (size_t)nLen);
         return nLen;
@@ -1317,8 +1311,8 @@ static int64_t _chm_decompress_region(chm_file* h, uint8_t* buf, int64_t start, 
 }
 
 /* retrieve (part of) an object */
-int64_t chm_retrieve_object(chm_file* h, chm_unit_info* ui, unsigned char* buf,
-                            int64_t addr, int64_t len) {
+int64_t chm_retrieve_object(chm_file* h, chm_unit_info* ui, unsigned char* buf, int64_t addr,
+                            int64_t len) {
     if (h == NULL)
         return (int64_t)0;
 
@@ -1331,8 +1325,8 @@ int64_t chm_retrieve_object(chm_file* h, chm_unit_info* ui, unsigned char* buf,
         len = ui->length - addr;
 
     if (ui->space == CHM_UNCOMPRESSED) {
-        return _chm_fetch_bytes(h, buf,
-                                (int64_t)h->data_offset + (int64_t)ui->start + (int64_t)addr, len);
+        return read_bytes(h, buf, (int64_t)h->data_offset + (int64_t)ui->start + (int64_t)addr,
+                          len);
     }
     if (ui->space != CHM_COMPRESSED) {
         return 0;
@@ -1396,7 +1390,7 @@ int chm_enumerate(chm_file* h, int what, CHM_ENUMERATOR e, void* context) {
 
     while (curPage != -1) {
         int64_t n = h->block_len;
-        if (_chm_fetch_bytes(h, buf, (int64_t)h->dir_offset + (int64_t)curPage * n, n) != n) {
+        if (read_bytes(h, buf, (int64_t)h->dir_offset + (int64_t)curPage * n, n) != n) {
             free(buf);
             return 0;
         }
