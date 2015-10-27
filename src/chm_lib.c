@@ -113,6 +113,10 @@ static void dbgprintf(const char* fmt, ...) {
 }
 #endif
 
+static int memeq(const void* d1, const void* d2, size_t n) {
+    return memcmp(d1, d2, n) == 0;
+}
+
 #if 0
 static void hexprint(uint8_t* d, int n) {
     for (int i = 0; i < n; i++) {
@@ -197,6 +201,23 @@ static void get_puchar(unmarshaller* u, uint8_t* dst, int nBytes) {
 
 static void get_uuid(unmarshaller* u, uint8_t* dst) {
     get_puchar(u, dst, 16);
+}
+
+static int64_t get_cword(unmarshaller* u) {
+    int64_t res = 0;
+    while (1) {
+        uint8_t* d = eat_bytes(u, 1);
+        if (NULL == d) {
+            return 0;
+        }
+        uint8_t b = *d;
+        res <<= 7;
+        if (b >= 0x80) {
+            res += b & 0x7f;
+        } else {
+            return res + b;
+        }
+    }
 }
 
 /* utilities for unmarshalling data */
@@ -318,26 +339,21 @@ static int unmarshal_itsf_header(unmarshaller* u, itsf_hdr* hdr) {
     }
 
     if (u->err != 0) {
-        dbgprintf("u->err %d\n", ver);
         return 0;
     }
 
     /* TODO: should also check UUIDs, probably, though with a version 3 file,
      * current MS tools do not seem to use them.
      */
-    if (memcmp(hdr->signature, "ITSF", 4) != 0) {
-        dbgprintf("invalid hdr->signature\n");
-
+    if (!memeq(hdr->signature, "ITSF", 4)) {
         return 0;
     }
 
     if (ver == 2 && hdr->header_len < CHM_ITSF_V2_LEN) {
-        dbgprintf("invalid len for ver 2\n");
         return 0;
     }
 
     if (ver == 3 && hdr->header_len < CHM_ITSF_V3_LEN) {
-        dbgprintf("invalid len for ver 3\n");
         return 0;
     }
 
@@ -389,7 +405,7 @@ static int unmarshal_itsp_header(unmarshaller* u, itsp_hdr* hdr) {
     if (u->err != 0) {
         return 0;
     }
-    if (memcmp(hdr->signature, "ITSP", 4) != 0) {
+    if (!memeq(hdr->signature, "ITSP", 4)) {
         return 0;
     }
     if (hdr->version != 1) {
@@ -408,16 +424,38 @@ static int unmarshal_itsp_header(unmarshaller* u, itsp_hdr* hdr) {
 /* structure of PMGL headers */
 static const char _chm_pmgl_marker[4] = "PMGL";
 #define CHM_PMGL_LEN 0x14
-struct chmPmglHeader {
+typedef struct pgml_hdr {
     char signature[4];     /*  0 (PMGL) */
     uint32_t free_space;   /*  4 */
     uint32_t unknown_0008; /*  8 */
     int32_t block_prev;    /*  c */
     int32_t block_next;    /* 10 */
-};                         /* __attribute__ ((aligned (1))); */
+} pgml_hdr;
+
+static int unmarshal_pmgl_header(unmarshaller* u, unsigned int blockLen, pgml_hdr* hdr) {
+    /* SumatraPDF: sanity check */
+    if (blockLen < CHM_PMGL_LEN)
+        return 0;
+
+    get_pchar(u, hdr->signature, 4);
+    hdr->free_space = get_uint32(u);
+    hdr->unknown_0008 = get_uint32(u);
+    hdr->block_prev = get_int32(u);
+    hdr->block_next = get_int32(u);
+
+    if (!memeq(hdr->signature, _chm_pmgl_marker, 4)) {
+        return 0;
+    }
+    /* SumatraPDF: sanity check */
+    if (hdr->free_space > blockLen - CHM_PMGL_LEN) {
+        return 0;
+    }
+
+    return 1;
+}
 
 static int _unmarshal_pmgl_header(unsigned char** pData, unsigned int* pDataLen,
-                                  unsigned int blockLen, struct chmPmglHeader* dest) {
+                                  unsigned int blockLen, pgml_hdr* dest) {
     /* we only know how to deal with a 0x14 byte structures */
     if (*pDataLen != CHM_PMGL_LEN)
         return 0;
@@ -432,9 +470,9 @@ static int _unmarshal_pmgl_header(unsigned char** pData, unsigned int* pDataLen,
     _unmarshal_int32(pData, pDataLen, &dest->block_prev);
     _unmarshal_int32(pData, pDataLen, &dest->block_next);
 
-    /* check structure */
-    if (memcmp(dest->signature, _chm_pmgl_marker, 4) != 0)
+    if (!memeq(dest->signature, _chm_pmgl_marker, 4))
         return 0;
+
     /* SumatraPDF: sanity check */
     if (dest->free_space > blockLen - CHM_PMGL_LEN)
         return 0;
@@ -463,8 +501,7 @@ static int _unmarshal_pmgi_header(unsigned char** pData, unsigned int* pDataLen,
     _unmarshal_char_array(pData, pDataLen, dest->signature, 4);
     _unmarshal_uint32(pData, pDataLen, &dest->free_space);
 
-    /* check structure */
-    if (memcmp(dest->signature, _chm_pmgi_marker, 4) != 0)
+    if (!memeq(dest->signature, _chm_pmgi_marker, 4))
         return 0;
     /* SumatraPDF: sanity check */
     if (dest->free_space > blockLen - CHM_PMGI_LEN)
@@ -557,8 +594,7 @@ static int _unmarshal_lzxc_control_data(unsigned char** pData, unsigned int* pDa
     if ((dest->resetInterval % (dest->windowSize / 2)) != 0)
         return 0;
 
-    /* check structure */
-    if (memcmp(dest->signature, "LZXC", 4) != 0)
+    if (!memeq(dest->signature, "LZXC", 4))
         return 0;
 
     return 1;
@@ -900,6 +936,18 @@ static int _chm_parse_UTF8(uint8_t** pEntry, int64_t count, char* path) {
     return 1;
 }
 
+/* copy n bytes out of u into dst and zero-terminate dst
+   return 0 on failure */
+static int copy_string(unmarshaller* u, int n, char* dst) {
+    uint8_t* d = eat_bytes(u, n);
+    if (d == NULL) {
+        return 0;
+    }
+    memcpy(dst, d, n);
+    dst[n] = 0;
+    return 1;
+}
+
 /* parse a PMGL entry into a chmUnitInfo struct; return 1 on success. */
 static int _chm_parse_PMGL_entry(uint8_t** pEntry, struct chmUnitInfo* ui) {
     int64_t strLen;
@@ -920,12 +968,33 @@ static int _chm_parse_PMGL_entry(uint8_t** pEntry, struct chmUnitInfo* ui) {
     return 1;
 }
 
+static int chm_parse_PMGL_entry(unmarshaller* u, struct chmUnitInfo* ui) {
+    int n = (int)get_cword(u);
+    if (n > CHM_MAX_PATHLEN || u->err != 0) {
+        return 0;
+    }
+
+    if (!copy_string(u, n, ui->path)) {
+        return 0;
+    }
+
+    ui->space = (int)get_cword(u);
+    ui->start = get_cword(u);
+    ui->length = get_cword(u);
+
+    if (u->err != 0) {
+        return 0;
+    }
+    return 1;
+}
+
 /* find an exact entry in PMGL; return NULL if we fail */
 static uint8_t* _chm_find_in_PMGL(uint8_t* page_buf, uint32_t block_len, const char* objPath) {
     /* XXX: modify this to do a binary search using the nice index structure
      *      that is provided for us.
      */
-    struct chmPmglHeader header;
+    pgml_hdr header;
+    // unmarshaller u;
     unsigned int hremain;
     uint8_t* end;
     uint8_t* cur;
@@ -936,6 +1005,8 @@ static uint8_t* _chm_find_in_PMGL(uint8_t* page_buf, uint32_t block_len, const c
     /* figure out where to start and end */
     cur = page_buf;
     hremain = CHM_PMGL_LEN;
+
+    // unmarshaller_init(&u, page_buf, hremain);
     if (!_unmarshal_pmgl_header(&cur, &hremain, block_len, &header))
         return NULL;
     end = page_buf + block_len - (header.free_space);
@@ -1012,14 +1083,14 @@ int chm_resolve_object(struct chmFile* h, const char* objPath, struct chmUnitInf
     /* until we have either returned or given up */
     while (curPage != -1) {
         /* try to fetch the index page */
-        if (_chm_fetch_bytes(h, page_buf, (int64_t)h->dir_offset + (int64_t)curPage * h->block_len,
-                             h->block_len) != h->block_len) {
+        int64_t n = h->block_len;
+        if (_chm_fetch_bytes(h, page_buf, (int64_t)h->dir_offset + (int64_t)curPage * n, n) != n) {
             free(page_buf);
             return CHM_RESOLVE_FAILURE;
         }
 
         /* now, if it is a leaf node: */
-        if (memcmp(page_buf, _chm_pmgl_marker, 4) == 0) {
+        if (memeq(page_buf, _chm_pmgl_marker, 4)) {
             /* scan block */
             uint8_t* pEntry = _chm_find_in_PMGL(page_buf, h->block_len, objPath);
             if (pEntry == NULL) {
@@ -1027,14 +1098,13 @@ int chm_resolve_object(struct chmFile* h, const char* objPath, struct chmUnitInf
                 return CHM_RESOLVE_FAILURE;
             }
 
-            /* parse entry and return */
             _chm_parse_PMGL_entry(&pEntry, ui);
             free(page_buf);
             return CHM_RESOLVE_SUCCESS;
         }
 
         /* else, if it is a branch node: */
-        else if (memcmp(page_buf, _chm_pmgi_marker, 4) == 0)
+        else if (memeq(page_buf, _chm_pmgi_marker, 4))
             curPage = _chm_find_in_PMGI(page_buf, h->block_len, objPath);
 
         /* else, we are confused.  give up. */
@@ -1312,47 +1382,38 @@ static int flags_from_path(char* path) {
 
 /* enumerate the objects in the .chm archive */
 int chm_enumerate(struct chmFile* h, int what, CHM_ENUMERATOR e, void* context) {
-    int32_t curPage;
-    struct chmPmglHeader header;
-    uint8_t* end;
-    uint8_t* cur;
-    unsigned int lenRemain;
+    pgml_hdr pgml;
 
-    /* buffer to hold whatever page we're looking at */
-    uint8_t* page_buf = malloc((unsigned int)h->block_len);
-    if (page_buf == NULL)
+    uint8_t* buf = malloc((unsigned int)h->block_len);
+    if (buf == NULL)
         return 0;
 
-    /* the current ui */
     struct chmUnitInfo ui;
     int type_bits = (what & 0x7);
     int filter_bits = (what & 0xF8);
 
-    /* starting page */
-    curPage = h->index_head;
+    int32_t curPage = h->index_head;
 
-    /* until we have either returned or given up */
     while (curPage != -1) {
-        /* try to fetch the index page */
-        if (_chm_fetch_bytes(h, page_buf, (int64_t)h->dir_offset + (int64_t)curPage * h->block_len,
-                             h->block_len) != h->block_len) {
-            free(page_buf);
+        int64_t n = h->block_len;
+        if (_chm_fetch_bytes(h, buf, (int64_t)h->dir_offset + (int64_t)curPage * n, n) != n) {
+            free(buf);
             return 0;
         }
 
-        /* figure out start and end for this page */
-        cur = page_buf;
-        lenRemain = CHM_PMGL_LEN;
-        if (!_unmarshal_pmgl_header(&cur, &lenRemain, h->block_len, &header)) {
-            free(page_buf);
+        unmarshaller u;
+        unmarshaller_init(&u, buf, n);
+
+        if (!unmarshal_pmgl_header(&u, h->block_len, &pgml)) {
+            free(buf);
             return 0;
         }
-        end = page_buf + h->block_len - (header.free_space);
+        u.bytesLeft -= pgml.free_space;
 
-        /* loop over this page */
-        while (cur < end) {
-            if (!_chm_parse_PMGL_entry(&cur, &ui)) {
-                free(page_buf);
+        /* decode all entries in this page */
+        while (u.bytesLeft > 0) {
+            if (!chm_parse_PMGL_entry(&u, &ui)) {
+                free(buf);
                 return 0;
             }
 
@@ -1364,29 +1425,25 @@ int chm_enumerate(struct chmFile* h, int what, CHM_ENUMERATOR e, void* context) 
             if (filter_bits && !(filter_bits & ui.flags))
                 continue;
 
-            /* call the enumerator */
-            {
-                int status = (*e)(h, &ui, context);
-                switch (status) {
-                    case CHM_ENUMERATOR_FAILURE:
-                        free(page_buf);
-                        return 0;
-                    case CHM_ENUMERATOR_CONTINUE:
-                        break;
-                    case CHM_ENUMERATOR_SUCCESS:
-                        free(page_buf);
-                        return 1;
-                    default:
-                        break;
-                }
+            int status = (*e)(h, &ui, context);
+            switch (status) {
+                case CHM_ENUMERATOR_FAILURE:
+                    free(buf);
+                    return 0;
+                case CHM_ENUMERATOR_CONTINUE:
+                    break;
+                case CHM_ENUMERATOR_SUCCESS:
+                    free(buf);
+                    return 1;
+                default:
+                    break;
             }
         }
 
-        /* advance to next page */
-        curPage = header.block_next;
+        curPage = pgml.block_next;
     }
 
-    free(page_buf);
+    free(buf);
     return 1;
 }
 
