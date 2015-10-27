@@ -59,7 +59,7 @@ extern "C" {
 #define CHM_COMPRESSED 1
 
 /* structure representing an ITS (CHM) file stream             */
-struct chmFile;
+struct chm_file;
 
 /* structure representing an element from an ITS file stream   */
 #define CHM_MAX_PATHLEN 512
@@ -73,27 +73,27 @@ typedef struct chm_unit_info {
 
 /* open an ITS archive */
 #ifdef PPC_BSTR
-struct chmFile* chm_open(BSTR filename);
+struct chm_file* chm_open(BSTR filename);
 #else
-struct chmFile* chm_open(const char* filename);
+struct chm_file* chm_open(const char* filename);
 #endif
 
 /* close an ITS archive */
-void chm_close(struct chmFile* h);
+void chm_close(struct chm_file* h);
 
-void chm_set_cache_size(struct chmFile* h, int nCacheBlocks);
+void chm_set_cache_size(struct chm_file* h, int nCacheBlocks);
 
 /* resolve a particular object from the archive */
 #define CHM_RESOLVE_SUCCESS 0
 #define CHM_RESOLVE_FAILURE 1
-int chm_resolve_object(struct chmFile* h, const char* objPath, chm_unit_info* ui);
+int chm_resolve_object(struct chm_file* h, const char* objPath, chm_unit_info* ui);
 
 /* retrieve part of an object from the archive */
-int64_t chm_retrieve_object(struct chmFile* h, chm_unit_info* ui, unsigned char* buf,
+int64_t chm_retrieve_object(struct chm_file* h, chm_unit_info* ui, unsigned char* buf,
                             int64_t addr, int64_t len);
 
 /* enumerate the objects in the .chm archive */
-typedef int (*CHM_ENUMERATOR)(struct chmFile* h, chm_unit_info* ui, void* context);
+typedef int (*CHM_ENUMERATOR)(struct chm_file* h, chm_unit_info* ui, void* context);
 #define CHM_ENUMERATE_NORMAL 1
 #define CHM_ENUMERATE_META 2
 #define CHM_ENUMERATE_SPECIAL 4
@@ -103,7 +103,7 @@ typedef int (*CHM_ENUMERATOR)(struct chmFile* h, chm_unit_info* ui, void* contex
 #define CHM_ENUMERATOR_FAILURE 0
 #define CHM_ENUMERATOR_CONTINUE 1
 #define CHM_ENUMERATOR_SUCCESS 2
-int chm_enumerate(struct chmFile* h, int what, CHM_ENUMERATOR e, void* context);
+int chm_enumerate(struct chm_file* h, int what, CHM_ENUMERATOR e, void* context);
 
 /* new API */
 
@@ -116,7 +116,7 @@ typedef struct chm_entry {
     int flags;
 } chm_entry;
 
-int chm_parse(struct chmFile* h, int* nEntries, chm_entry** entries);
+int chm_parse(struct chm_file* h, int* nEntries, chm_entry** entries);
 
 #ifdef __cplusplus
 }

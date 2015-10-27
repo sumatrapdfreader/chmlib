@@ -32,7 +32,7 @@
 
 #define UNUSED(x) (void) x
 
-static int _print_ui(struct chmFile* h, chm_unit_info* ui, void* context) {
+static int _print_ui(struct chm_file* h, chm_unit_info* ui, void* context) {
     static char szBuf[128] = {0};
 
     UNUSED(h);
@@ -56,7 +56,7 @@ static int _print_ui(struct chmFile* h, chm_unit_info* ui, void* context) {
 }
 
 int main(int c, char** v) {
-    struct chmFile* h;
+    struct chm_file* h;
     int i;
 
     for (i = 1; i < c; i++) {

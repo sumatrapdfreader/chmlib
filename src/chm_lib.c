@@ -603,7 +603,7 @@ static int _unmarshal_lzxc_control_data(unsigned char** pData, unsigned int* pDa
 #define MAX_CACHE_BLOCKS 128
 
 /* the structure used for chm file handles */
-struct chmFile {
+typedef struct chm_file {
 #ifdef WIN32
     HANDLE fd;
 #else
@@ -636,7 +636,7 @@ struct chmFile {
     uint8_t* cache_blocks[MAX_CACHE_BLOCKS];
     int64_t cache_block_indices[MAX_CACHE_BLOCKS];
     int32_t cache_num_blocks;
-};
+} chm_file;
 
 #ifdef WIN32
 static void close_file(HANDLE h) {
@@ -645,7 +645,7 @@ static void close_file(HANDLE h) {
     }
 }
 
-static int64_t _chm_fetch_bytes(struct chmFile* h, uint8_t* buf, int64_t os, int64_t len) {
+static int64_t _chm_fetch_bytes(chm_file* h, uint8_t* buf, int64_t os, int64_t len) {
     int64_t readLen = 0, oldOs = 0;
     if (h->fd == INVALID_HANDLE_VALUE)
         return readLen;
@@ -678,7 +678,7 @@ static void close_file(int fd) {
     }
 }
 
-static int64_t _chm_fetch_bytes(struct chmFile* h, uint8_t* buf, int64_t os, int64_t len) {
+static int64_t _chm_fetch_bytes(chm_file* h, uint8_t* buf, int64_t os, int64_t len) {
     int64_t readLen = 0, oldOs = 0;
     if (h->fd == -1)
         return readLen;
@@ -708,15 +708,15 @@ static int64_t _chm_fetch_bytes(struct chmFile* h, uint8_t* buf, int64_t os, int
 
 /* open an ITS archive */
 #ifdef PPC_BSTR
-struct chmFile* chm_open(BSTR filename)
+chm_file* chm_open(BSTR filename)
 #else
-struct chmFile* chm_open(const char* filename)
+chm_file* chm_open(const char* filename)
 #endif
 {
     unsigned char buf[256];
     unsigned int n;
     unsigned char* tmp;
-    struct chmFile* h = NULL;
+    chm_file* h = NULL;
     itsf_hdr itsfHeader;
     itsp_hdr itspHeader;
     chm_unit_info uiLzxc;
@@ -724,7 +724,7 @@ struct chmFile* chm_open(const char* filename)
     unmarshaller u;
 
     /* allocate handle */
-    h = (struct chmFile*)calloc(1, sizeof(struct chmFile));
+    h = (chm_file*)calloc(1, sizeof(chm_file));
     if (h == NULL)
         return NULL;
 
@@ -842,7 +842,7 @@ Error:
 }
 
 /* close an ITS archive */
-void chm_close(struct chmFile* h) {
+void chm_close(chm_file* h) {
     if (h == NULL) {
         return;
     }
@@ -863,7 +863,7 @@ void chm_close(struct chmFile* h) {
  *  used as a hash value, and hash collision results in the
  *  invalidation of the previously cached block.
  */
-void chm_set_cache_size(struct chmFile* h, int nCacheBlocks) {
+void chm_set_cache_size(chm_file* h, int nCacheBlocks) {
     if (nCacheBlocks == h->cache_num_blocks) {
         return;
     }
@@ -1069,7 +1069,7 @@ static int32_t _chm_find_in_PMGI(uint8_t* page_buf, uint32_t block_len, const ch
 }
 
 /* resolve a particular object from the archive */
-int chm_resolve_object(struct chmFile* h, const char* objPath, chm_unit_info* ui) {
+int chm_resolve_object(chm_file* h, const char* objPath, chm_unit_info* ui) {
     int32_t curPage;
 
     /* buffer to hold whatever page we're looking at */
@@ -1124,7 +1124,7 @@ int chm_resolve_object(struct chmFile* h, const char* objPath, chm_unit_info* ui
  */
 
 /* get the bounds of a compressed block.  return 0 on failure */
-static int _chm_get_cmpblock_bounds(struct chmFile* h, int64_t block, int64_t* start,
+static int _chm_get_cmpblock_bounds(chm_file* h, int64_t block, int64_t* start,
                                     int64_t* len) {
     uint8_t buffer[8], *dummy;
     unsigned int remain;
@@ -1174,7 +1174,7 @@ static int _chm_get_cmpblock_bounds(struct chmFile* h, int64_t block, int64_t* s
     return 1;
 }
 
-static int64_t _chm_decompress_block(struct chmFile* h, int64_t block, uint8_t** ubuffer) {
+static int64_t _chm_decompress_block(chm_file* h, int64_t block, uint8_t** ubuffer) {
     uint8_t* cbuffer = malloc(((unsigned int)h->reset_table.block_len + 6144));
     int64_t cmpStart;                                            /* compressed start  */
     int64_t cmpLen;                                              /* compressed len    */
@@ -1268,19 +1268,16 @@ static int64_t _chm_decompress_block(struct chmFile* h, int64_t block, uint8_t**
 }
 
 /* grab a region from a compressed block */
-static int64_t _chm_decompress_region(struct chmFile* h, uint8_t* buf, int64_t start, int64_t len) {
-    int64_t nBlock, nOffset;
-    int64_t nLen;
-    int64_t gotLen;
+static int64_t _chm_decompress_region(chm_file* h, uint8_t* buf, int64_t start, int64_t len) {
     uint8_t* ubuffer;
 
     if (len <= 0)
         return (int64_t)0;
 
     /* figure out what we need to read */
-    nBlock = start / h->reset_table.block_len;
-    nOffset = start % h->reset_table.block_len;
-    nLen = len;
+    int64_t nBlock = start / h->reset_table.block_len;
+    int64_t nOffset = start % h->reset_table.block_len;
+    int64_t nLen = len;
     if (nLen > (h->reset_table.block_len - nOffset))
         nLen = h->reset_table.block_len - nOffset;
 
@@ -1298,8 +1295,7 @@ static int64_t _chm_decompress_region(struct chmFile* h, uint8_t* buf, int64_t s
         h->lzx_state = LZXinit(window_size);
     }
 
-    /* decompress some data */
-    gotLen = _chm_decompress_block(h, nBlock, &ubuffer);
+    int64_t gotLen = _chm_decompress_block(h, nBlock, &ubuffer);
     /* SumatraPDF: check return value */
     if (gotLen == (int64_t)-1) {
         return 0;
@@ -1311,7 +1307,7 @@ static int64_t _chm_decompress_region(struct chmFile* h, uint8_t* buf, int64_t s
 }
 
 /* retrieve (part of) an object */
-int64_t chm_retrieve_object(struct chmFile* h, chm_unit_info* ui, unsigned char* buf,
+int64_t chm_retrieve_object(chm_file* h, chm_unit_info* ui, unsigned char* buf,
                             int64_t addr, int64_t len) {
     if (h == NULL)
         return (int64_t)0;
@@ -1375,7 +1371,7 @@ static int flags_from_path(char* path) {
 }
 
 /* enumerate the objects in the .chm archive */
-int chm_enumerate(struct chmFile* h, int what, CHM_ENUMERATOR e, void* context) {
+int chm_enumerate(chm_file* h, int what, CHM_ENUMERATOR e, void* context) {
     pgml_hdr pgml;
 
     uint8_t* buf = malloc((unsigned int)h->block_len);
@@ -1441,7 +1437,7 @@ int chm_enumerate(struct chmFile* h, int what, CHM_ENUMERATOR e, void* context) 
     return 1;
 }
 
-int chm_parse(struct chmFile* h, int* nEntries, chm_entry** entries) {
+int chm_parse(chm_file* h, int* nEntries, chm_entry** entries) {
     UNUSED(h);
     UNUSED(nEntries);
     UNUSED(entries);

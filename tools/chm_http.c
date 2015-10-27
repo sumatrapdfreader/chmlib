@@ -119,7 +119,7 @@ int main(int c, char** v) {
 
 struct chmHttpServer {
     int socket;
-    struct chmFile* file;
+    struct chm_file* file;
 };
 
 struct chmHttpSlave {
@@ -178,11 +178,11 @@ static void chmhttp_server(const char* filename) {
     free(slave);
 }
 
-static void service_request(int fd, struct chmFile* file);
+static void service_request(int fd, struct chm_file* file);
 
 static void* _slave(void* param) {
     struct chmHttpSlave* slave;
-    struct chmFile* file;
+    struct chm_file* file;
 
     /* grab our relevant information */
     slave = (struct chmHttpSlave*)param;
@@ -235,7 +235,7 @@ static const char* lookup_mime(const char* ext) {
     return "application/octet-stream";
 }
 
-static int _print_ui_index(struct chmFile* h, chm_unit_info* ui, void* context) {
+static int _print_ui_index(struct chm_file* h, chm_unit_info* ui, void* context) {
     UNUSED(h);
     UNUSED(context);
     FILE* fout = (FILE*)context;
@@ -248,7 +248,7 @@ static int _print_ui_index(struct chmFile* h, chm_unit_info* ui, void* context) 
     return CHM_ENUMERATOR_CONTINUE;
 }
 
-static void deliver_index(FILE* fout, struct chmFile* file) {
+static void deliver_index(FILE* fout, struct chm_file* file) {
     fprintf(fout,
             "HTTP/1.1 200 OK\r\n"
             "Connection: close\r\n"
@@ -264,7 +264,7 @@ static void deliver_index(FILE* fout, struct chmFile* file) {
     fprintf(fout, "</tt> </table></body></html>");
 }
 
-static void deliver_content(FILE* fout, const char* filename, struct chmFile* file) {
+static void deliver_content(FILE* fout, const char* filename, struct chm_file* file) {
     chm_unit_info ui;
     const char* ext;
     unsigned char buffer[65536];
@@ -304,7 +304,7 @@ static void deliver_content(FILE* fout, const char* filename, struct chmFile* fi
     fclose(fout);
 }
 
-static void service_request(int fd, struct chmFile* file) {
+static void service_request(int fd, struct chm_file* file) {
     char buffer[4096];
     char buffer2[4096];
     char* end;
