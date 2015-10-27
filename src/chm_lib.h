@@ -63,13 +63,13 @@ struct chmFile;
 
 /* structure representing an element from an ITS file stream   */
 #define CHM_MAX_PATHLEN 512
-struct chmUnitInfo {
+typedef struct chm_unit_info {
     int64_t start;
     int64_t length;
     int space;
     int flags;
     char path[CHM_MAX_PATHLEN + 1];
-};
+} chm_unit_info;
 
 /* open an ITS archive */
 #ifdef PPC_BSTR
@@ -86,14 +86,14 @@ void chm_set_cache_size(struct chmFile* h, int nCacheBlocks);
 /* resolve a particular object from the archive */
 #define CHM_RESOLVE_SUCCESS 0
 #define CHM_RESOLVE_FAILURE 1
-int chm_resolve_object(struct chmFile* h, const char* objPath, struct chmUnitInfo* ui);
+int chm_resolve_object(struct chmFile* h, const char* objPath, chm_unit_info* ui);
 
 /* retrieve part of an object from the archive */
-int64_t chm_retrieve_object(struct chmFile* h, struct chmUnitInfo* ui, unsigned char* buf,
+int64_t chm_retrieve_object(struct chmFile* h, chm_unit_info* ui, unsigned char* buf,
                             int64_t addr, int64_t len);
 
 /* enumerate the objects in the .chm archive */
-typedef int (*CHM_ENUMERATOR)(struct chmFile* h, struct chmUnitInfo* ui, void* context);
+typedef int (*CHM_ENUMERATOR)(struct chmFile* h, chm_unit_info* ui, void* context);
 #define CHM_ENUMERATE_NORMAL 1
 #define CHM_ENUMERATE_META 2
 #define CHM_ENUMERATE_SPECIAL 4

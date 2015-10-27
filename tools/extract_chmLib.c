@@ -88,7 +88,7 @@ static int rmkdir(char* path) {
 /*
  * callback function for enumerate API
  */
-static int _extract_callback(struct chmFile* h, struct chmUnitInfo* ui, void* context) {
+static int _extract_callback(struct chmFile* h, chm_unit_info* ui, void* context) {
     int64_t ui_path_len;
     char buffer[32768];
     struct extract_context* ctx = (struct extract_context*)context;

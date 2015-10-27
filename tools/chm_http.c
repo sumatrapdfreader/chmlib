@@ -235,7 +235,7 @@ static const char* lookup_mime(const char* ext) {
     return "application/octet-stream";
 }
 
-static int _print_ui_index(struct chmFile* h, struct chmUnitInfo* ui, void* context) {
+static int _print_ui_index(struct chmFile* h, chm_unit_info* ui, void* context) {
     UNUSED(h);
     UNUSED(context);
     FILE* fout = (FILE*)context;
@@ -265,7 +265,7 @@ static void deliver_index(FILE* fout, struct chmFile* file) {
 }
 
 static void deliver_content(FILE* fout, const char* filename, struct chmFile* file) {
-    struct chmUnitInfo ui;
+    chm_unit_info ui;
     const char* ext;
     unsigned char buffer[65536];
     int swath, offset;

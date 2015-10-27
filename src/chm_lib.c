@@ -618,8 +618,8 @@ struct chmFile {
     uint32_t block_len;
 
     int64_t span;
-    struct chmUnitInfo rt_unit;
-    struct chmUnitInfo cn_unit;
+    chm_unit_info rt_unit;
+    chm_unit_info cn_unit;
     struct chmLzxcResetTable reset_table;
 
     /* LZX control data */
@@ -719,7 +719,7 @@ struct chmFile* chm_open(const char* filename)
     struct chmFile* h = NULL;
     itsf_hdr itsfHeader;
     itsp_hdr itspHeader;
-    struct chmUnitInfo uiLzxc;
+    chm_unit_info uiLzxc;
     struct chmLzxcControlData ctlData;
     unmarshaller u;
 
@@ -949,7 +949,7 @@ static int copy_string(unmarshaller* u, int n, char* dst) {
 }
 
 /* parse a PMGL entry into a chmUnitInfo struct; return 1 on success. */
-static int _chm_parse_PMGL_entry(uint8_t** pEntry, struct chmUnitInfo* ui) {
+static int _chm_parse_PMGL_entry(uint8_t** pEntry, chm_unit_info* ui) {
     int64_t strLen;
 
     /* parse str len */
@@ -968,7 +968,7 @@ static int _chm_parse_PMGL_entry(uint8_t** pEntry, struct chmUnitInfo* ui) {
     return 1;
 }
 
-static int chm_parse_PMGL_entry(unmarshaller* u, struct chmUnitInfo* ui) {
+static int chm_parse_PMGL_entry(unmarshaller* u, chm_unit_info* ui) {
     int n = (int)get_cword(u);
     if (n > CHM_MAX_PATHLEN || u->err != 0) {
         return 0;
@@ -1069,7 +1069,7 @@ static int32_t _chm_find_in_PMGI(uint8_t* page_buf, uint32_t block_len, const ch
 }
 
 /* resolve a particular object from the archive */
-int chm_resolve_object(struct chmFile* h, const char* objPath, struct chmUnitInfo* ui) {
+int chm_resolve_object(struct chmFile* h, const char* objPath, chm_unit_info* ui) {
     int32_t curPage;
 
     /* buffer to hold whatever page we're looking at */
@@ -1311,9 +1311,8 @@ static int64_t _chm_decompress_region(struct chmFile* h, uint8_t* buf, int64_t s
 }
 
 /* retrieve (part of) an object */
-int64_t chm_retrieve_object(struct chmFile* h, struct chmUnitInfo* ui, unsigned char* buf,
+int64_t chm_retrieve_object(struct chmFile* h, chm_unit_info* ui, unsigned char* buf,
                             int64_t addr, int64_t len) {
-    /* must be valid file handle */
     if (h == NULL)
         return (int64_t)0;
 
@@ -1325,40 +1324,35 @@ int64_t chm_retrieve_object(struct chmFile* h, struct chmUnitInfo* ui, unsigned 
     if (addr + len > ui->length)
         len = ui->length - addr;
 
-    /* if the file is uncompressed, it's simple */
     if (ui->space == CHM_UNCOMPRESSED) {
-        /* read data */
         return _chm_fetch_bytes(h, buf,
                                 (int64_t)h->data_offset + (int64_t)ui->start + (int64_t)addr, len);
     }
+    if (ui->space != CHM_COMPRESSED) {
+        return 0;
+    }
 
-    /* else if the file is compressed, it's a little trickier */
-    else /* ui->space == CHM_COMPRESSED */
-    {
-        int64_t swath = 0, total = 0;
+    int64_t swath = 0, total = 0;
 
-        /* if compression is not enabled for this file... */
-        if (!h->compression_enabled)
+    /* if compression is not enabled for this file... */
+    if (!h->compression_enabled)
+        return total;
+
+    do {
+        swath = _chm_decompress_region(h, buf, ui->start + addr, len);
+
+        if (swath == 0)
             return total;
 
-        do {
-            /* swill another mouthful */
-            swath = _chm_decompress_region(h, buf, ui->start + addr, len);
+        /* update stats */
+        total += swath;
+        len -= swath;
+        addr += swath;
+        buf += swath;
 
-            /* if we didn't get any... */
-            if (swath == 0)
-                return total;
+    } while (len != 0);
 
-            /* update stats */
-            total += swath;
-            len -= swath;
-            addr += swath;
-            buf += swath;
-
-        } while (len != 0);
-
-        return total;
-    }
+    return total;
 }
 
 static int flags_from_path(char* path) {
@@ -1388,7 +1382,7 @@ int chm_enumerate(struct chmFile* h, int what, CHM_ENUMERATOR e, void* context) 
     if (buf == NULL)
         return 0;
 
-    struct chmUnitInfo ui;
+    chm_unit_info ui;
     int type_bits = (what & 0x7);
     int filter_bits = (what & 0xF8);
 

@@ -17,7 +17,7 @@
 
 #define UNUSED(x) (void) x
 
-static uint8_t* extract_file(struct chmFile* h, struct chmUnitInfo* ui) {
+static uint8_t* extract_file(struct chmFile* h, chm_unit_info* ui) {
     int64_t len = (int64_t)ui->length;
 
     uint8_t* buf = (uint8_t*)malloc(len + 1);
@@ -63,7 +63,7 @@ static void sha1_to_hex(uint8_t* sha1, char* sha1Hex) {
     }
 }
 
-static int enum_cb(struct chmFile* h, struct chmUnitInfo* ui, void* ctx) {
+static int enum_cb(struct chmFile* h, chm_unit_info* ui, void* ctx) {
     UNUSED(ctx);
     char buf[128] = {0};
     uint8_t sha1[20] = {0};
