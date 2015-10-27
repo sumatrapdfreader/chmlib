@@ -631,6 +631,7 @@ typedef struct chm_file {
     /* decompressor state */
     struct LZXstate* lzx_state;
     int lzx_last_block;
+    uint8_t *lzx_last_block_data;
 
     /* cache for decompressed blocks */
     uint8_t* cache_blocks[MAX_CACHE_BLOCKS];
@@ -1066,7 +1067,7 @@ static int32_t _chm_find_in_PMGI(uint8_t* page_buf, uint32_t block_len, const ch
     hremain = CHM_PMGI_LEN;
     if (!_unmarshal_pmgi_header(&cur, &hremain, block_len, &header))
         return -1;
-    end = page_buf + block_len - (header.free_space);
+    end = page_buf + block_len - header.free_space;
 
     /* now, scan progressively */
     while (cur < end) {
@@ -1190,86 +1191,80 @@ static int _chm_get_cmpblock_bounds(chm_file* h, int64_t block, int64_t* start, 
     return 1;
 }
 
-static int64_t _chm_decompress_block(chm_file* h, int64_t block, uint8_t** ubuffer) {
-    uint8_t* cbuffer = malloc(((unsigned int)h->reset_table.block_len + 6144));
-    int64_t cmpStart;                                            /* compressed start  */
-    int64_t cmpLen;                                              /* compressed len    */
-    uint8_t* lbuffer;                                            /* local buffer ptr  */
-    uint32_t blockAlign = ((uint32_t)block % h->reset_blkcount); /* reset intvl. aln. */
-    uint32_t i;                                                  /* local loop index  */
+static uint8_t* uncompress_block(chm_file* h, int64_t nBlock) {
+    size_t blockSize = h->reset_table.block_len;
+    // TODO: cache buf on chm_file
 
-    if (cbuffer == NULL)
-        return -1;
+    if (h->lzx_last_block == nBlock) {
+      return h->lzx_last_block_data;
+    }
+
+    if (nBlock % h->reset_blkcount == 0) {
+        LZXreset(h->lzx_state);
+    }
+
+    uint8_t* buf = malloc(blockSize + 6144);
+    if (buf == NULL)
+        return NULL;
+
+    uint8_t* uncompressed = alloc_cached_block(h, nBlock);
+    if (!uncompressed) {
+        goto Error;
+    }
+
+    dbgprintf("Decompressing block #%4d (EXTRA)\n", nBlock);
+    int64_t cmpStart, cmpLen;
+    if (!_chm_get_cmpblock_bounds(h, nBlock, &cmpStart, &cmpLen)) {
+        goto Error;
+    }
+    if (cmpLen < 0 || cmpLen > (int64_t)blockSize + 6144) {
+        goto Error;
+    }
+
+    if (read_bytes(h, buf, cmpStart, cmpLen) != cmpLen) {
+        goto Error;
+    }
+
+    int res = LZXdecompress(h->lzx_state, buf, uncompressed, (int)cmpLen, (int)blockSize);
+    if (res != DECR_OK) {
+        dbgprintf("   (DECOMPRESS FAILED!)\n");
+        goto Error;
+    }
+
+    h->lzx_last_block = nBlock;
+    h->lzx_last_block_data = uncompressed;
+    free(buf);
+    return uncompressed;
+Error:
+    free(buf);
+    return NULL;
+}
+
+static int64_t _chm_decompress_block(chm_file* h, int64_t nBlock, uint8_t** ubuffer) {
+    uint32_t blockAlign = ((uint32_t)nBlock % h->reset_blkcount); /* reset intvl. aln. */
 
     /* let the caching system pull its weight! */
-    if (block - blockAlign <= h->lzx_last_block && block >= h->lzx_last_block)
-        blockAlign = ((uint32_t)block - h->lzx_last_block);
+    if (nBlock - blockAlign <= h->lzx_last_block && nBlock >= h->lzx_last_block)
+        blockAlign = ((uint32_t)nBlock - h->lzx_last_block);
 
-    size_t blockSize = h->reset_table.block_len;
     /* check if we need previous blocks */
     if (blockAlign != 0) {
         /* fetch all required previous blocks since last reset */
-        for (i = blockAlign; i > 0; i--) {
-            uint32_t curBlockIdx = (uint32_t)block - i;
-
-            /* check if we most recently decompressed the previous block */
-            if (h->lzx_last_block != (int)curBlockIdx) {
-                if ((curBlockIdx % h->reset_blkcount) == 0) {
-                    dbgprintf("***RESET (1)***\n");
-                    LZXreset(h->lzx_state);
-                }
-
-                lbuffer = alloc_cached_block(h, curBlockIdx);
-                if (!lbuffer) {
-                    free(cbuffer);
-                    return -1;
-                }
-
-                /* decompress the previous block */
-                dbgprintf("Decompressing block #%4d (EXTRA)\n", curBlockIdx);
-                if (!_chm_get_cmpblock_bounds(h, curBlockIdx, &cmpStart, &cmpLen) || cmpLen < 0 ||
-                    cmpLen > (int64_t)blockSize + 6144 ||
-                    read_bytes(h, cbuffer, cmpStart, cmpLen) != cmpLen ||
-                    LZXdecompress(h->lzx_state, cbuffer, lbuffer, (int)cmpLen, (int)blockSize) !=
-                        DECR_OK) {
-                    dbgprintf("   (DECOMPRESS FAILED!)\n");
-                    free(cbuffer);
-                    return (int64_t)0;
-                }
-
-                h->lzx_last_block = (int)curBlockIdx;
+        for (uint32_t i = blockAlign; i > 0; i--) {
+            uint8_t* d = uncompress_block(h, nBlock - i);
+            if (!d) {
+                return 0;
             }
         }
-    } else {
-        if ((block % h->reset_blkcount) == 0) {
-            dbgprintf("***RESET (2)***\n");
-            LZXreset(h->lzx_state);
-        }
     }
-
-    lbuffer = alloc_cached_block(h, block);
-    if (!lbuffer) {
-        free(cbuffer);
-        return -1;
+    *ubuffer = uncompress_block(h, nBlock);
+    if (!*ubuffer) {
+        return 0;
     }
-
-    *ubuffer = lbuffer;
-
-    /* decompress the block we actually want */
-    dbgprintf("Decompressing block #%4d (REAL )\n", (int)block);
-    if (!_chm_get_cmpblock_bounds(h, block, &cmpStart, &cmpLen) ||
-        read_bytes(h, cbuffer, cmpStart, cmpLen) != cmpLen ||
-        LZXdecompress(h->lzx_state, cbuffer, lbuffer, (int)cmpLen, (int)blockSize) != DECR_OK) {
-        dbgprintf("   (DECOMPRESS FAILED!)\n");
-        free(cbuffer);
-        return (int64_t)0;
-    }
-    h->lzx_last_block = (int)block;
 
     /* XXX: modify LZX routines to return the length of the data they
      * decompressed and return that instead, for an extra sanity check.
      */
-    free(cbuffer);
     return h->reset_table.block_len;
 }
 
