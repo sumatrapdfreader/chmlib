@@ -4,7 +4,8 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
-./build.sh
+source ./build.sh
+clang_rel_one
 
 if [ -e /Volumes/Store ]; then
   go run tools/test_dir.go -check-ref /Volumes/Store

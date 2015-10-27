@@ -70,6 +70,8 @@
 
 #define UNUSED(x) (void) x
 
+//#define CHM_DEBUG 1
+
 /*
  * defines related to tuning
  */
@@ -110,6 +112,90 @@ static void dbgprintf(const char* fmt, ...) {
     (void)fmt;
 }
 #endif
+
+static void hexprint(uint8_t *d, int n) {
+  for (int i = 0; i < n; i++) {
+    dbgprintf("%x ", (int)d[i]);
+  }
+  dbgprintf("\n");
+}
+
+typedef struct unmarshaller {
+    uint8_t* d;
+    int bytesLeft;
+    int err;
+} unmarshaller;
+
+static void unmarshaller_init(unmarshaller* u, uint8_t* d, int dLen) {
+    u->d = d;
+    u->bytesLeft = dLen;
+    u->err = 0;
+}
+
+static uint8_t* eat_bytes(unmarshaller* u, int n) {
+    if (u->err != 0) {
+        return NULL;
+    }
+    if (u->bytesLeft < n) {
+        u->err = 1;
+        return NULL;
+    }
+    uint8_t* res = u->d;
+    u->bytesLeft -= n;
+    u->d += n;
+    return res;
+}
+
+static uint64_t get_uint_n(unmarshaller* u, int nBytesNeeded) {
+    uint8_t* d = eat_bytes(u, nBytesNeeded);
+    if (d == NULL) {
+        return 0;
+    }
+    uint64_t res = 0;
+    for (int i = nBytesNeeded-1; i >= 0; i--) {
+        res <<= 8;
+        res |= d[i];
+    }
+    return res;
+}
+
+static uint64_t get_uint64(unmarshaller* u) {
+    return get_uint_n(u, (int)sizeof(uint64_t));
+}
+
+#if 0
+static uint64_t get_int64(unmarshaller* u) {
+    return (int64_t)get_uint64(u);
+}
+#endif
+
+static uint32_t get_uint32(unmarshaller* u) {
+    return get_uint_n(u, sizeof(uint32_t));
+}
+
+static int32_t get_int32(unmarshaller* u) {
+    return (int32_t)get_uint32(u);
+}
+
+static void get_pchar(unmarshaller* u, char* dst, int nBytes) {
+    uint8_t* d = eat_bytes(u, nBytes);
+    if (d == NULL) {
+        return;
+    }
+    memcpy(dst, (char*)d, nBytes);
+}
+
+static void get_puchar(unmarshaller* u, uint8_t* dst, int nBytes) {
+    uint8_t* d = eat_bytes(u, nBytes);
+    if (d == NULL) {
+        return;
+    }
+    memcpy((char*)dst, (char*)d, nBytes);
+}
+
+static void get_uuid(unmarshaller* u, uint8_t* dst) {
+    get_puchar(u, dst, 16);
+}
 
 /* utilities for unmarshalling data */
 static int _unmarshal_char_array(unsigned char** pData, unsigned int* pLenRemain, char* dest,
@@ -197,10 +283,6 @@ static const char CHMU_CONTENT[] = "::DataSpace/Storage/MSCompressed/Content";
 static const char CHMU_SPANINFO[] = "::DataSpace/Storage/MSCompressed/SpanInfo";
 #endif
 
-/*
- * structures local to this module
- */
-
 /* structure of ITSF headers */
 #define CHM_ITSF_V2_LEN 0x58
 #define CHM_ITSF_V3_LEN 0x60
@@ -219,6 +301,65 @@ struct chmItsfHeader {
     int64_t dir_len;         /* 50 */
     int64_t data_offset;     /* 58 (Not present before V3) */
 };                           /* __attribute__ ((aligned (1))); */
+
+/* returns 0 on error */
+static int unmarshal_itsf_header(unmarshaller* u, struct chmItsfHeader* hdr) {
+    get_pchar(u, hdr->signature, 4);
+    hdr->version = get_int32(u);
+    hdr->header_len = get_int32(u);
+    hdr->unknown_000c = get_int32(u);
+    hdr->last_modified = get_uint32(u);
+    hdr->lang_id = get_uint32(u);
+    get_uuid(u, hdr->dir_uuid);
+    get_uuid(u, hdr->stream_uuid);
+    hdr->unknown_offset = get_uint64(u);
+    hdr->unknown_len = get_uint64(u);
+    hdr->dir_offset = get_uint64(u);
+    hdr->dir_len = get_uint64(u);
+
+    int ver = hdr->version;
+    if (!(ver == 2 || ver == 3)) {
+        dbgprintf("invalid ver %d\n", ver);
+        return 0;
+    }
+
+    if (ver == 3) {
+        hdr->data_offset = get_uint64(u);
+    } else {
+        hdr->data_offset = hdr->dir_offset + hdr->dir_len;
+    }
+
+    if (u->err != 0) {
+        dbgprintf("u->err %d\n", ver);
+        return 0;
+    }
+
+    /* TODO: should also check UUIDs, probably, though with a version 3 file,
+     * current MS tools do not seem to use them.
+     */
+    if (memcmp(hdr->signature, "ITSF", 4) != 0) {
+        dbgprintf("invalid hdr->signature\n");
+
+        return 0;
+    }
+
+    if (ver == 2 && hdr->header_len < CHM_ITSF_V2_LEN) {
+        dbgprintf("invalid len for ver 2\n");
+        return 0;
+    }
+
+    if (ver == 3 && hdr->header_len < CHM_ITSF_V3_LEN) {
+        dbgprintf("invalid len for ver 3\n");
+        return 0;
+    }
+
+    /* SumatraPDF: sanity check (huge values are usually due to broken files) */
+    if (hdr->dir_offset > UINT_MAX || hdr->dir_len > UINT_MAX) {
+        return 0;
+    }
+
+    return 1;
+}
 
 static int _unmarshal_itsf_header(unsigned char** pData, unsigned int* pDataLen,
                                   struct chmItsfHeader* dest) {
@@ -272,6 +413,7 @@ static int _unmarshal_itsf_header(unsigned char** pData, unsigned int* pDataLen,
 
     return 1;
 }
+
 
 /* structure of ITSP headers */
 #define CHM_ITSP_V1_LEN 0x54
@@ -602,158 +744,142 @@ struct chmFile* chm_open(BSTR filename)
 struct chmFile* chm_open(const char* filename)
 #endif
 {
-    unsigned char sbuffer[256];
-    unsigned int sremain;
-    unsigned char* sbufpos;
-    struct chmFile* newHandle = NULL;
+    unsigned char buf[256];
+    unsigned int n;
+    unsigned char* tmp;
+    struct chmFile* h = NULL;
     struct chmItsfHeader itsfHeader;
+    struct chmItsfHeader itsfHeader2;
     struct chmItspHeader itspHeader;
-#if 0
-    struct chmUnitInfo          uiSpan;
-#endif
     struct chmUnitInfo uiLzxc;
     struct chmLzxcControlData ctlData;
+    unmarshaller u;
 
     /* allocate handle */
-    newHandle = (struct chmFile*)calloc(1, sizeof(struct chmFile));
-    if (newHandle == NULL)
+    h = (struct chmFile*)calloc(1, sizeof(struct chmFile));
+    if (h == NULL)
         return NULL;
 
 /* open file */
 #ifdef WIN32
 #ifdef PPC_BSTR
-    if ((newHandle->fd = CreateFile(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
-                                    FILE_ATTRIBUTE_NORMAL, NULL)) == INVALID_HANDLE_VALUE) {
-        free(newHandle);
+    if ((h->fd = CreateFile(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                            FILE_ATTRIBUTE_NORMAL, NULL)) == INVALID_HANDLE_VALUE) {
+        free(h);
         return NULL;
     }
 #else
-    if ((newHandle->fd = CreateFileA(filename, GENERIC_READ, 0, NULL, OPEN_EXISTING,
-                                     FILE_ATTRIBUTE_NORMAL, NULL)) == INVALID_HANDLE_VALUE) {
-        free(newHandle);
+    if ((h->fd = CreateFileA(filename, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
+                             NULL)) == INVALID_HANDLE_VALUE) {
+        free(h);
         return NULL;
     }
 #endif
 #else
-    newHandle->fd = open(filename, O_RDONLY);
-    if (newHandle->fd == -1) {
-        free(newHandle);
+    h->fd = open(filename, O_RDONLY);
+    if (h->fd == -1) {
+        free(h);
         return NULL;
     }
 #endif
 
     /* read and verify header */
-    sremain = CHM_ITSF_V3_LEN;
-    sbufpos = sbuffer;
-    if (_chm_fetch_bytes(newHandle, sbuffer, (int64_t)0, sremain) != sremain ||
-        !_unmarshal_itsf_header(&sbufpos, &sremain, &itsfHeader)) {
-        chm_close(newHandle);
-        return NULL;
+    n = CHM_ITSF_V3_LEN;
+    if (_chm_fetch_bytes(h, buf, 0, n) != n) {
+        goto Error;
+    }
+
+    unmarshaller_init(&u, (uint8_t*)buf, n);
+    if (!unmarshal_itsf_header(&u, &itsfHeader)) {
+      dbgprintf("unmarshal_itsf_header() failed\n");
+      goto Error;
+    }
+
+    tmp = buf;
+    _unmarshal_itsf_header(&tmp, &n, &itsfHeader2);
+    if (memcmp(&itsfHeader, &itsfHeader2, sizeof(itsfHeader)) != 0) {
+      dbgprintf("headers mismatch, itsfHeader:\n");
+      hexprint((uint8_t*)&itsfHeader, sizeof(itsfHeader));
+      dbgprintf("itsfHeader2:\n");
+      hexprint((uint8_t*)&itsfHeader2, sizeof(itsfHeader2));
     }
 
     /* stash important values from header */
-    newHandle->dir_offset = itsfHeader.dir_offset;
-    newHandle->dir_len = itsfHeader.dir_len;
-    newHandle->data_offset = itsfHeader.data_offset;
+    h->dir_offset = itsfHeader.dir_offset;
+    h->dir_len = itsfHeader.dir_len;
+    h->data_offset = itsfHeader.data_offset;
 
     /* now, read and verify the directory header chunk */
-    sremain = CHM_ITSP_V1_LEN;
-    sbufpos = sbuffer;
-    if (_chm_fetch_bytes(newHandle, sbuffer, (int64_t)itsfHeader.dir_offset, sremain) != sremain ||
-        !_unmarshal_itsp_header(&sbufpos, &sremain, &itspHeader)) {
-        chm_close(newHandle);
-        return NULL;
+    n = CHM_ITSP_V1_LEN;
+    if (_chm_fetch_bytes(h, buf, (int64_t)itsfHeader.dir_offset, n) != n) {
+        goto Error;
+    }
+    tmp = buf;
+    if (!_unmarshal_itsp_header(&tmp, &n, &itspHeader)) {
+        goto Error;
     }
 
     /* grab essential information from ITSP header */
-    newHandle->dir_offset += itspHeader.header_len;
-    newHandle->dir_len -= itspHeader.header_len;
-    newHandle->index_root = itspHeader.index_root;
-    newHandle->index_head = itspHeader.index_head;
-    newHandle->block_len = itspHeader.block_len;
+    h->dir_offset += itspHeader.header_len;
+    h->dir_len -= itspHeader.header_len;
+    h->index_root = itspHeader.index_root;
+    h->index_head = itspHeader.index_head;
+    h->block_len = itspHeader.block_len;
 
     /* if the index root is -1, this means we don't have any PMGI blocks.
      * as a result, we must use the sole PMGL block as the index root
      */
-    if (newHandle->index_root <= -1)
-        newHandle->index_root = newHandle->index_head;
+    if (h->index_root <= -1)
+        h->index_root = h->index_head;
 
     /* By default, compression is enabled. */
-    newHandle->compression_enabled = 1;
-
-/* Jed, Sun Jun 27: 'span' doesn't seem to be used anywhere?! */
-#if 0
-    /* fetch span */
-    if (CHM_RESOLVE_SUCCESS != chm_resolve_object(newHandle,
-                                                  CHMU_SPANINFO,
-                                                  &uiSpan)                ||
-        uiSpan.space == CHM_COMPRESSED)
-    {
-        chm_close(newHandle);
-        return NULL;
-    }
-
-    /* N.B.: we've already checked that uiSpan is in the uncompressed section,
-     *       so this should not require attempting to decompress, which may
-     *       rely on having a valid "span"
-     */
-    sremain = 8;
-    sbufpos = sbuffer;
-    if (chm_retrieve_object(newHandle, &uiSpan, sbuffer,
-                            0, sremain) != sremain                        ||
-        !_unmarshal_uint64(&sbufpos, &sremain, &newHandle->span))
-    {
-        chm_close(newHandle);
-        return NULL;
-    }
-#endif
+    h->compression_enabled = 1;
 
     /* prefetch most commonly needed unit infos */
-    if (CHM_RESOLVE_SUCCESS !=
-            chm_resolve_object(newHandle, CHMU_RESET_TABLE, &newHandle->rt_unit) ||
-        newHandle->rt_unit.space == CHM_COMPRESSED ||
-        CHM_RESOLVE_SUCCESS != chm_resolve_object(newHandle, CHMU_CONTENT, &newHandle->cn_unit) ||
-        newHandle->cn_unit.space == CHM_COMPRESSED ||
-        CHM_RESOLVE_SUCCESS != chm_resolve_object(newHandle, CHMU_LZXC_CONTROLDATA, &uiLzxc) ||
+    if (CHM_RESOLVE_SUCCESS != chm_resolve_object(h, CHMU_RESET_TABLE, &h->rt_unit) ||
+        h->rt_unit.space == CHM_COMPRESSED ||
+        CHM_RESOLVE_SUCCESS != chm_resolve_object(h, CHMU_CONTENT, &h->cn_unit) ||
+        h->cn_unit.space == CHM_COMPRESSED ||
+        CHM_RESOLVE_SUCCESS != chm_resolve_object(h, CHMU_LZXC_CONTROLDATA, &uiLzxc) ||
         uiLzxc.space == CHM_COMPRESSED) {
-        newHandle->compression_enabled = 0;
+        h->compression_enabled = 0;
     }
 
     /* read reset table info */
-    if (newHandle->compression_enabled) {
-        sremain = CHM_LZXC_RESETTABLE_V1_LEN;
-        sbufpos = sbuffer;
-        if (chm_retrieve_object(newHandle, &newHandle->rt_unit, sbuffer, 0, sremain) != sremain ||
-            !_unmarshal_lzxc_reset_table(&sbufpos, &sremain, &newHandle->reset_table)) {
-            newHandle->compression_enabled = 0;
+    if (h->compression_enabled) {
+        n = CHM_LZXC_RESETTABLE_V1_LEN;
+        tmp = buf;
+        if (chm_retrieve_object(h, &h->rt_unit, buf, 0, n) != n ||
+            !_unmarshal_lzxc_reset_table(&tmp, &n, &h->reset_table)) {
+            h->compression_enabled = 0;
         }
     }
 
     /* read control data */
-    if (newHandle->compression_enabled) {
-        sremain = (unsigned int)uiLzxc.length;
-        if (uiLzxc.length > (int64_t)sizeof(sbuffer)) {
-            chm_close(newHandle);
-            return NULL;
+    if (h->compression_enabled) {
+        n = (unsigned int)uiLzxc.length;
+        if (uiLzxc.length > (int64_t)sizeof(buf)) {
+            goto Error;
         }
 
-        sbufpos = sbuffer;
-        if (chm_retrieve_object(newHandle, &uiLzxc, sbuffer, 0, sremain) != sremain ||
-            !_unmarshal_lzxc_control_data(&sbufpos, &sremain, &ctlData)) {
-            newHandle->compression_enabled = 0;
+        tmp = buf;
+        if (chm_retrieve_object(h, &uiLzxc, buf, 0, n) != n ||
+            !_unmarshal_lzxc_control_data(&tmp, &n, &ctlData)) {
+            h->compression_enabled = 0;
         } else /* SumatraPDF: prevent division by zero */
         {
-            newHandle->window_size = ctlData.windowSize;
-            newHandle->reset_interval = ctlData.resetInterval;
+            h->window_size = ctlData.windowSize;
+            h->reset_interval = ctlData.resetInterval;
 
-            newHandle->reset_blkcount =
-                newHandle->reset_interval / (newHandle->window_size / 2) * ctlData.windowsPerReset;
+            h->reset_blkcount = h->reset_interval / (h->window_size / 2) * ctlData.windowsPerReset;
         }
     }
 
-    chm_set_cache_size(newHandle, CHM_MAX_BLOCKS_CACHED);
-
-    return newHandle;
+    chm_set_cache_size(h, CHM_MAX_BLOCKS_CACHED);
+    return h;
+Error:
+    chm_close(h);
+    return NULL;
 }
 
 /* close an ITS archive */
@@ -785,8 +911,8 @@ void chm_set_cache_size(struct chmFile* h, int nCacheBlocks) {
     if (nCacheBlocks > MAX_CACHE_BLOCKS) {
         nCacheBlocks = MAX_CACHE_BLOCKS;
     }
-    uint8_t* newBlocks[MAX_CACHE_BLOCKS];
-    int64_t newIndices[MAX_CACHE_BLOCKS];
+    uint8_t* newBlocks[MAX_CACHE_BLOCKS] = { 0 };
+    int64_t newIndices[MAX_CACHE_BLOCKS] = { 0 };
 
     /* re-distribute old cached blocks */
     for (int i = 0; i < h->cache_num_blocks; i++) {
