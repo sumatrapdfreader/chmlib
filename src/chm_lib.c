@@ -631,7 +631,9 @@ typedef struct chm_file {
     /* decompressor state */
     struct LZXstate* lzx_state;
     int lzx_last_block;
-    uint8_t *lzx_last_block_data;
+    uint8_t* lzx_last_block_data;
+
+    uint8_t* blockBuf;
 
     /* cache for decompressed blocks */
     uint8_t* cache_blocks[MAX_CACHE_BLOCKS];
@@ -852,9 +854,11 @@ void chm_close(chm_file* h) {
     if (h->lzx_state)
         LZXteardown(h->lzx_state);
 
-    for (int i = 0; i < h->cache_num_blocks; i++) {
+    for (int i = 0; i < MAX_CACHE_BLOCKS; i++) {
         free(h->cache_blocks[i]);
     }
+
+    free(h->blockBuf);
     free(h);
 }
 
@@ -1193,51 +1197,50 @@ static int _chm_get_cmpblock_bounds(chm_file* h, int64_t block, int64_t* start, 
 
 static uint8_t* uncompress_block(chm_file* h, int64_t nBlock) {
     size_t blockSize = h->reset_table.block_len;
-    // TODO: cache buf on chm_file
-
     if (h->lzx_last_block == nBlock) {
-      return h->lzx_last_block_data;
+        return h->lzx_last_block_data;
     }
 
     if (nBlock % h->reset_blkcount == 0) {
         LZXreset(h->lzx_state);
     }
 
-    uint8_t* buf = malloc(blockSize + 6144);
-    if (buf == NULL)
+    if (h->blockBuf == NULL) {
+        h->blockBuf = malloc(blockSize + 6144);
+    }
+
+    uint8_t* buf = h->blockBuf;
+    if (buf == NULL) {
         return NULL;
+    }
 
     uint8_t* uncompressed = alloc_cached_block(h, nBlock);
     if (!uncompressed) {
-        goto Error;
+        return NULL;
     }
 
     dbgprintf("Decompressing block #%4d (EXTRA)\n", nBlock);
     int64_t cmpStart, cmpLen;
     if (!_chm_get_cmpblock_bounds(h, nBlock, &cmpStart, &cmpLen)) {
-        goto Error;
+        return NULL;
     }
     if (cmpLen < 0 || cmpLen > (int64_t)blockSize + 6144) {
-        goto Error;
+        return NULL;
     }
 
     if (read_bytes(h, buf, cmpStart, cmpLen) != cmpLen) {
-        goto Error;
+        return NULL;
     }
 
     int res = LZXdecompress(h->lzx_state, buf, uncompressed, (int)cmpLen, (int)blockSize);
     if (res != DECR_OK) {
         dbgprintf("   (DECOMPRESS FAILED!)\n");
-        goto Error;
+        return NULL;
     }
 
     h->lzx_last_block = nBlock;
     h->lzx_last_block_data = uncompressed;
-    free(buf);
     return uncompressed;
-Error:
-    free(buf);
-    return NULL;
 }
 
 static int64_t _chm_decompress_block(chm_file* h, int64_t nBlock, uint8_t** ubuffer) {
