@@ -116,7 +116,7 @@ typedef struct chm_entry {
     int flags;
 } chm_entry;
 
-int chm_parse(struct chm_file* h, int* nEntries, chm_entry** entries);
+chm_entry **chm_parse(struct chm_file* h, int* nEntries);
 
 #ifdef __cplusplus
 }

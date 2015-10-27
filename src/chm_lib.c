@@ -68,8 +68,6 @@
 #include "chm_lib.h"
 #include "lzx.h"
 
-#define UNUSED(x) (void) x
-
 //#define CHM_DEBUG 1
 
 #ifndef CHM_MAX_BLOCKS_CACHED
@@ -134,7 +132,6 @@ typedef struct pgml_hdr {
     int32_t block_next;    /* 10 */
 } pgml_hdr;
 
-
 /* structure of LZXC reset table */
 #define CHM_LZXC_RESETTABLE_V1_LEN 0x28
 struct chmLzxcResetTable {
@@ -196,7 +193,6 @@ typedef struct chm_file {
     int64_t cache_block_indices[MAX_CACHE_BLOCKS];
     int cache_num_blocks;
 } chm_file;
-
 
 /* structure of PMGI headers */
 static const char _chm_pmgi_marker[4] = "PMGI";
@@ -622,7 +618,6 @@ static int _unmarshal_lzxc_control_data(unsigned char** pData, unsigned int* pDa
     return 1;
 }
 
-
 #ifdef WIN32
 static void close_file(HANDLE h) {
     if (h != INVALID_HANDLE_VALUE) {
@@ -945,7 +940,7 @@ static int copy_string(unmarshaller* u, int n, char* dst) {
 }
 
 /* parse a PMGL entry into a chmUnitInfo struct; return 1 on success. */
-static int _chm_parse_PMGL_entry(uint8_t** pEntry, chm_unit_info* ui) {
+static int _chm_parse_pmgl_entry(uint8_t** pEntry, chm_unit_info* ui) {
     int64_t strLen;
 
     /* parse str len */
@@ -964,7 +959,7 @@ static int _chm_parse_PMGL_entry(uint8_t** pEntry, chm_unit_info* ui) {
     return 1;
 }
 
-static int chm_parse_PMGL_entry(unmarshaller* u, chm_unit_info* ui) {
+static int chm_parse_pmgl_entry(unmarshaller* u, chm_unit_info* ui) {
     int n = (int)get_cword(u);
     if (n > CHM_MAX_PATHLEN || u->err != 0) {
         return 0;
@@ -1094,7 +1089,7 @@ int chm_resolve_object(chm_file* h, const char* objPath, chm_unit_info* ui) {
                 return CHM_RESOLVE_FAILURE;
             }
 
-            _chm_parse_PMGL_entry(&pEntry, ui);
+            _chm_parse_pmgl_entry(&pEntry, ui);
             free(page_buf);
             return CHM_RESOLVE_SUCCESS;
         }
@@ -1376,7 +1371,7 @@ int chm_enumerate(chm_file* h, int what, CHM_ENUMERATOR e, void* context) {
 
         /* decode all entries in this page */
         while (u.bytesLeft > 0) {
-            if (!chm_parse_PMGL_entry(&u, &ui)) {
+            if (!chm_parse_pmgl_entry(&u, &ui)) {
                 free(buf);
                 return 0;
             }
@@ -1411,9 +1406,103 @@ int chm_enumerate(chm_file* h, int what, CHM_ENUMERATOR e, void* context) {
     return 1;
 }
 
-int chm_parse(chm_file* h, int* nEntries, chm_entry** entries) {
-    UNUSED(h);
-    UNUSED(nEntries);
-    UNUSED(entries);
-    return 1;
+#if 0
+typedef struct chm_entry {
+    struct chm_entry* next;
+    char* path;
+    int64_t start;
+    int64_t length;
+    int space;
+    int flags;
+} chm_entry;
+#endif
+
+static chm_entry* entry_from_ui(chm_unit_info* ui) {
+    size_t pathLen = strlen(ui->path);
+    size_t n = sizeof(chm_entry) + pathLen + 1;
+    chm_entry* res = (chm_entry*)calloc(1, n);
+    if (res == NULL) {
+        return NULL;
+    }
+    res->start = ui->start;
+    res->length = ui->length;
+    res->space = ui->space;
+    res->flags = ui->flags;
+    res->path = (char*)res + sizeof(chm_entry);
+    memcpy(res->path, ui->path, pathLen + 1);
+    return res;
+}
+
+chm_entry **chm_parse(chm_file* h, int* n_entries_out) {
+    pgml_hdr pgml;
+    chm_unit_info ui;
+
+    chm_entry **res = NULL;
+    uint8_t* buf = malloc((size_t)h->itsp.block_len);
+    if (buf == NULL)
+        return 0;
+
+    int nEntries = 0;
+    chm_entry* e;
+    chm_entry* last_entry = NULL;
+
+    int32_t curPage = h->itsp.index_head;
+
+    while (curPage != -1) {
+        int64_t n = h->itsp.block_len;
+        if (read_bytes(h, buf, (int64_t)h->dir_offset + (int64_t)curPage * n, n) != n) {
+            goto Error;
+        }
+
+        unmarshaller u;
+        unmarshaller_init(&u, buf, n);
+        if (!unmarshal_pmgl_header(&u, h->itsp.block_len, &pgml)) {
+            goto Error;
+        }
+        u.bytesLeft -= pgml.free_space;
+
+        /* decode all entries in this page */
+        while (u.bytesLeft > 0) {
+            if (!chm_parse_pmgl_entry(&u, &ui)) {
+                goto Error;
+            }
+            ui.flags = flags_from_path(ui.path);
+            e = entry_from_ui(&ui);
+            if (e == NULL) {
+                goto Error;
+            }
+            e->next = last_entry;
+            last_entry = e;
+            nEntries++;
+        }
+        curPage = pgml.block_next;
+    }
+    if (0 == nEntries) {
+      goto Error;
+    }
+    *n_entries_out = nEntries;
+    res = (chm_entry**)calloc(nEntries, sizeof(chm_entry*));
+    if (res == NULL) {
+      goto Error;
+    }
+    e = last_entry;
+    int n = nEntries - 1;
+    while (e != NULL) {
+      res[n] = e;
+      --n;
+      e = e->next;
+    }
+    free(buf);
+    return res;
+Error:
+    e = last_entry;
+    chm_entry *next;
+    while (e != NULL) {
+      next = e->next;
+      free(e);
+      e = next;
+    }
+    free(res);
+    free(buf);
+    return NULL;
 }
