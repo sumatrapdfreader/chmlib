@@ -35,7 +35,7 @@ clang_rel_one()
   OUT=obj/clang/rel
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
-  $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
+  #$CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
 
 clang_dbg()
@@ -64,5 +64,5 @@ gcc_rel()
 }
 
 #gcc_rel
-#clang_rel_one
-clang_rel
+clang_rel_one
+#clang_rel

@@ -299,7 +299,7 @@ static void deliver_content(FILE* fout, const char* filename, struct chm_file* f
             swath = 65536;
         swath = (int)chm_retrieve_object(file, &ui, buffer, offset, swath);
         offset += swath;
-        fwrite(buffer, 1, swath, fout);
+        fwrite(buffer, 1, (size_t)swath, fout);
     }
     fclose(fout);
 }

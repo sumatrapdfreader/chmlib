@@ -20,7 +20,7 @@
 static uint8_t* extract_file(struct chm_file* h, chm_unit_info* ui) {
     int64_t len = (int64_t)ui->length;
 
-    uint8_t* buf = (uint8_t*)malloc(len + 1);
+    uint8_t* buf = (uint8_t*)malloc((size_t)len + 1);
     if (buf == NULL) {
         return NULL;
     }
@@ -84,7 +84,7 @@ static int enum_cb(struct chm_file* h, chm_unit_info* ui, void* ctx) {
     if (ui->length > 0) {
         uint8_t* d = extract_file(h, ui);
         if (d != NULL) {
-            int err = sha1_process_all(d, ui->length, sha1);
+            int err = sha1_process_all(d, (unsigned long)ui->length, sha1);
             free(d);
             if (err != CRYPT_OK) {
                 return CHM_ENUMERATOR_FAILURE;
