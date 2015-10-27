@@ -1,5 +1,9 @@
 #!/bin/bash
 
+set -o nounset
+set -o errexit
+set -o pipefail
+
 ./build.sh
 
 if [ -e /Volumes/Store ]; then
