@@ -113,12 +113,14 @@ static void dbgprintf(const char* fmt, ...) {
 }
 #endif
 
-static void hexprint(uint8_t *d, int n) {
-  for (int i = 0; i < n; i++) {
-    dbgprintf("%x ", (int)d[i]);
-  }
-  dbgprintf("\n");
+#if 0
+static void hexprint(uint8_t* d, int n) {
+    for (int i = 0; i < n; i++) {
+        dbgprintf("%x ", (int)d[i]);
+    }
+    dbgprintf("\n");
 }
+#endif
 
 typedef struct unmarshaller {
     uint8_t* d;
@@ -152,7 +154,7 @@ static uint64_t get_uint_n(unmarshaller* u, int nBytesNeeded) {
         return 0;
     }
     uint64_t res = 0;
-    for (int i = nBytesNeeded-1; i >= 0; i--) {
+    for (int i = nBytesNeeded - 1; i >= 0; i--) {
         res <<= 8;
         res |= d[i];
     }
@@ -200,16 +202,6 @@ static void get_uuid(unmarshaller* u, uint8_t* dst) {
 /* utilities for unmarshalling data */
 static int _unmarshal_char_array(unsigned char** pData, unsigned int* pLenRemain, char* dest,
                                  int count) {
-    if (count <= 0 || (unsigned int)count > *pLenRemain)
-        return 0;
-    memcpy(dest, (*pData), count);
-    *pData += count;
-    *pLenRemain -= count;
-    return 1;
-}
-
-static int _unmarshal_uchar_array(unsigned char** pData, unsigned int* pLenRemain,
-                                  unsigned char* dest, int count) {
     if (count <= 0 || (unsigned int)count > *pLenRemain)
         return 0;
     memcpy(dest, (*pData), count);
@@ -268,10 +260,6 @@ static int _unmarshal_uint64(unsigned char** pData, unsigned int* pLenRemain, in
     return 1;
 }
 
-static int _unmarshal_uuid(unsigned char** pData, unsigned int* pDataLen, unsigned char* dest) {
-    return _unmarshal_uchar_array(pData, pDataLen, dest, 16);
-}
-
 /* names of sections essential to decompression */
 static const char CHMU_RESET_TABLE[] =
     "::DataSpace/Storage/MSCompressed/Transform/"
@@ -286,7 +274,7 @@ static const char CHMU_SPANINFO[] = "::DataSpace/Storage/MSCompressed/SpanInfo";
 /* structure of ITSF headers */
 #define CHM_ITSF_V2_LEN 0x58
 #define CHM_ITSF_V3_LEN 0x60
-struct chmItsfHeader {
+typedef struct itsf_hdr {
     char signature[4];       /*  0 (ITSF) */
     int32_t version;         /*  4 */
     int32_t header_len;      /*  8 */
@@ -300,10 +288,10 @@ struct chmItsfHeader {
     int64_t dir_offset;      /* 48 */
     int64_t dir_len;         /* 50 */
     int64_t data_offset;     /* 58 (Not present before V3) */
-};                           /* __attribute__ ((aligned (1))); */
+} itsf_hdr;
 
 /* returns 0 on error */
-static int unmarshal_itsf_header(unmarshaller* u, struct chmItsfHeader* hdr) {
+static int unmarshal_itsf_header(unmarshaller* u, itsf_hdr* hdr) {
     get_pchar(u, hdr->signature, 4);
     hdr->version = get_int32(u);
     hdr->header_len = get_int32(u);
@@ -361,63 +349,9 @@ static int unmarshal_itsf_header(unmarshaller* u, struct chmItsfHeader* hdr) {
     return 1;
 }
 
-static int _unmarshal_itsf_header(unsigned char** pData, unsigned int* pDataLen,
-                                  struct chmItsfHeader* dest) {
-    /* we only know how to deal with the 0x58 and 0x60 byte structures */
-    if (*pDataLen != CHM_ITSF_V2_LEN && *pDataLen != CHM_ITSF_V3_LEN)
-        return 0;
-
-    /* unmarshal common fields */
-    _unmarshal_char_array(pData, pDataLen, dest->signature, 4);
-    _unmarshal_int32(pData, pDataLen, &dest->version);
-    _unmarshal_int32(pData, pDataLen, &dest->header_len);
-    _unmarshal_int32(pData, pDataLen, &dest->unknown_000c);
-    _unmarshal_uint32(pData, pDataLen, &dest->last_modified);
-    _unmarshal_uint32(pData, pDataLen, &dest->lang_id);
-    _unmarshal_uuid(pData, pDataLen, dest->dir_uuid);
-    _unmarshal_uuid(pData, pDataLen, dest->stream_uuid);
-    _unmarshal_uint64(pData, pDataLen, &dest->unknown_offset);
-    _unmarshal_uint64(pData, pDataLen, &dest->unknown_len);
-    _unmarshal_uint64(pData, pDataLen, &dest->dir_offset);
-    _unmarshal_uint64(pData, pDataLen, &dest->dir_len);
-
-    /* error check the data */
-    /* XXX: should also check UUIDs, probably, though with a version 3 file,
-     * current MS tools do not seem to use them.
-     */
-    if (memcmp(dest->signature, "ITSF", 4) != 0)
-        return 0;
-    if (dest->version == 2) {
-        if (dest->header_len < CHM_ITSF_V2_LEN)
-            return 0;
-    } else if (dest->version == 3) {
-        if (dest->header_len < CHM_ITSF_V3_LEN)
-            return 0;
-    } else
-        return 0;
-
-    /* now, if we have a V3 structure, unmarshal the rest.
-     * otherwise, compute it
-     */
-    if (dest->version == 3) {
-        if (*pDataLen != 0)
-            _unmarshal_uint64(pData, pDataLen, &dest->data_offset);
-        else
-            return 0;
-    } else
-        dest->data_offset = dest->dir_offset + dest->dir_len;
-
-    /* SumatraPDF: sanity check (huge values are usually due to broken files) */
-    if (dest->dir_offset > UINT_MAX || dest->dir_len > UINT_MAX)
-        return 0;
-
-    return 1;
-}
-
-
 /* structure of ITSP headers */
 #define CHM_ITSP_V1_LEN 0x54
-struct chmItspHeader {
+typedef struct itsp_hdr {
     char signature[4];        /*  0 (ITSP) */
     int32_t version;          /*  4 */
     int32_t header_len;       /*  8 */
@@ -433,42 +367,41 @@ struct chmItspHeader {
     uint32_t lang_id;         /* 30 */
     uint8_t system_uuid[16];  /* 34 */
     uint8_t unknown_0044[16]; /* 44 */
-};                            /* __attribute__ ((aligned (1))); */
+} itsp_hdr;
 
-static int _unmarshal_itsp_header(unsigned char** pData, unsigned int* pDataLen,
-                                  struct chmItspHeader* dest) {
-    /* we only know how to deal with a 0x54 byte structures */
-    if (*pDataLen != CHM_ITSP_V1_LEN)
-        return 0;
+static int unmarshal_itsp_header(unmarshaller* u, itsp_hdr* hdr) {
+    get_pchar(u, hdr->signature, 4);
+    hdr->version = get_int32(u);
+    hdr->header_len = get_int32(u);
+    hdr->unknown_000c = get_int32(u);
+    hdr->block_len = get_uint32(u);
+    hdr->blockidx_intvl = get_int32(u);
+    hdr->index_depth = get_int32(u);
+    hdr->index_root = get_int32(u);
+    hdr->index_head = get_int32(u);
+    hdr->unknown_0024 = get_int32(u);
+    hdr->num_blocks = get_uint32(u);
+    hdr->unknown_002c = get_int32(u);
+    hdr->lang_id = get_uint32(u);
+    get_uuid(u, hdr->system_uuid);
+    get_puchar(u, hdr->unknown_0044, 16);
 
-    /* unmarshal fields */
-    _unmarshal_char_array(pData, pDataLen, dest->signature, 4);
-    _unmarshal_int32(pData, pDataLen, &dest->version);
-    _unmarshal_int32(pData, pDataLen, &dest->header_len);
-    _unmarshal_int32(pData, pDataLen, &dest->unknown_000c);
-    _unmarshal_uint32(pData, pDataLen, &dest->block_len);
-    _unmarshal_int32(pData, pDataLen, &dest->blockidx_intvl);
-    _unmarshal_int32(pData, pDataLen, &dest->index_depth);
-    _unmarshal_int32(pData, pDataLen, &dest->index_root);
-    _unmarshal_int32(pData, pDataLen, &dest->index_head);
-    _unmarshal_int32(pData, pDataLen, &dest->unknown_0024);
-    _unmarshal_uint32(pData, pDataLen, &dest->num_blocks);
-    _unmarshal_int32(pData, pDataLen, &dest->unknown_002c);
-    _unmarshal_uint32(pData, pDataLen, &dest->lang_id);
-    _unmarshal_uuid(pData, pDataLen, dest->system_uuid);
-    _unmarshal_uchar_array(pData, pDataLen, dest->unknown_0044, 16);
-
-    /* error check the data */
-    if (memcmp(dest->signature, "ITSP", 4) != 0)
+    if (u->err != 0) {
         return 0;
-    if (dest->version != 1)
+    }
+    if (memcmp(hdr->signature, "ITSP", 4) != 0) {
         return 0;
-    if (dest->header_len != CHM_ITSP_V1_LEN)
+    }
+    if (hdr->version != 1) {
         return 0;
+    }
+    if (hdr->header_len != CHM_ITSP_V1_LEN) {
+        return 0;
+    }
     /* SumatraPDF: sanity check */
-    if (dest->block_len == 0)
+    if (hdr->block_len == 0) {
         return 0;
-
+    }
     return 1;
 }
 
@@ -748,9 +681,8 @@ struct chmFile* chm_open(const char* filename)
     unsigned int n;
     unsigned char* tmp;
     struct chmFile* h = NULL;
-    struct chmItsfHeader itsfHeader;
-    struct chmItsfHeader itsfHeader2;
-    struct chmItspHeader itspHeader;
+    itsf_hdr itsfHeader;
+    itsp_hdr itspHeader;
     struct chmUnitInfo uiLzxc;
     struct chmLzxcControlData ctlData;
     unmarshaller u;
@@ -791,17 +723,8 @@ struct chmFile* chm_open(const char* filename)
 
     unmarshaller_init(&u, (uint8_t*)buf, n);
     if (!unmarshal_itsf_header(&u, &itsfHeader)) {
-      dbgprintf("unmarshal_itsf_header() failed\n");
-      goto Error;
-    }
-
-    tmp = buf;
-    _unmarshal_itsf_header(&tmp, &n, &itsfHeader2);
-    if (memcmp(&itsfHeader, &itsfHeader2, sizeof(itsfHeader)) != 0) {
-      dbgprintf("headers mismatch, itsfHeader:\n");
-      hexprint((uint8_t*)&itsfHeader, sizeof(itsfHeader));
-      dbgprintf("itsfHeader2:\n");
-      hexprint((uint8_t*)&itsfHeader2, sizeof(itsfHeader2));
+        dbgprintf("unmarshal_itsf_header() failed\n");
+        goto Error;
     }
 
     /* stash important values from header */
@@ -814,8 +737,8 @@ struct chmFile* chm_open(const char* filename)
     if (_chm_fetch_bytes(h, buf, (int64_t)itsfHeader.dir_offset, n) != n) {
         goto Error;
     }
-    tmp = buf;
-    if (!_unmarshal_itsp_header(&tmp, &n, &itspHeader)) {
+    unmarshaller_init(&u, (uint8_t*)buf, n);
+    if (!unmarshal_itsp_header(&u, &itspHeader)) {
         goto Error;
     }
 
@@ -911,8 +834,8 @@ void chm_set_cache_size(struct chmFile* h, int nCacheBlocks) {
     if (nCacheBlocks > MAX_CACHE_BLOCKS) {
         nCacheBlocks = MAX_CACHE_BLOCKS;
     }
-    uint8_t* newBlocks[MAX_CACHE_BLOCKS] = { 0 };
-    int64_t newIndices[MAX_CACHE_BLOCKS] = { 0 };
+    uint8_t* newBlocks[MAX_CACHE_BLOCKS] = {0};
+    int64_t newIndices[MAX_CACHE_BLOCKS] = {0};
 
     /* re-distribute old cached blocks */
     for (int i = 0; i < h->cache_num_blocks; i++) {
