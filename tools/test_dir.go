@@ -164,7 +164,7 @@ func checkRefFile(path string) error {
 	d := buf.Bytes()
 	lines := outputToLines(d)
 	if len(lines) != len(expectedLines) {
-		fmt.Printf("different results for '%s'\n", sha1Hex)
+		fmt.Printf("different results for '%s', '%s'\n", sha1Hex, path)
 		fmt.Printf("len(lines) = %d, len(expectedLines) = %d\n", len(lines), len(expectedLines))
 		return fmt.Errorf("mismatch for file '%s' of sha1 '%s'", path, sha1Hex)
 	}
