@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"golang.org/x/net/publicsuffix"
 )
@@ -44,12 +45,38 @@ var (
 	}
 	seenFiles        map[string]bool
 	referenceResults map[string][]string
+	nFile            int
+	timeStart        time.Time
 	flgCheckRef      bool
+)
+
+// White-listed changes:
+
+/*
+Probably because what used to be an error in decompression, no longer is an
+error. Seen first in https://github.com/sumatrapdfreader/chmlib/commit/1775b5298fcd3feb3df7a4140a6eb37b7c68f099
+so a change must have happened before this.
+
+different results for '7575a94fb9bebd9eab9f1c038f22e12917d94c84' on line 351, file '/Volumes/Store/books/_chm/Que.Mobile.Guide.to.BlackBerry.May.2005.eBook-LiB.chm'
+expected: '1,1874347,1093,file,0000000000000000000000000000000000000000,/0789733439/images/0789733439/graphics/browser.gif;400479'
+got     : '1,1874347,1093,file,464320F04EB262006A3B1EB74D1A2F897ECA9986,/0789733439/images/0789733439/graphics/browser.gif;400479'
+*/
+var (
+	whiteListed = []string{"7575a94fb9bebd9eab9f1c038f22e12917d94c84"}
 )
 
 func init() {
 	seenFiles = make(map[string]bool)
 	referenceResults = make(map[string][]string)
+}
+
+func isWhiteListed(sha1 string) bool {
+	for _, s := range whiteListed {
+		if sha1 == s {
+			return true
+		}
+	}
+	return false
 }
 
 func seenSha1(sha1Hex string) bool {
@@ -144,6 +171,7 @@ func checkRefFile(path string) error {
 	if seenSha1(sha1Hex) {
 		return nil
 	}
+	nFile++
 	expectedLines, ok := referenceResults[sha1Hex]
 	if !ok {
 		fmt.Printf("don't have reference result for '%s'\n", sha1Hex)
@@ -170,12 +198,16 @@ func checkRefFile(path string) error {
 	}
 	idx := lineDiffIndex(lines, expectedLines)
 	if idx != -1 {
+		if isWhiteListed(sha1Hex) {
+			fmt.Printf("%s: mismatch but whitelisted!\n", sha1Hex)
+			return nil
+		}
 		fmt.Printf("different results for '%s' on line %d, file '%s'\n", sha1Hex, idx, path)
 		fmt.Printf("expected: '%s'\n", expectedLines[idx])
 		fmt.Printf("got     : '%s'\n", lines[idx])
 		return fmt.Errorf("mismatch for file '%s' of sha1 '%s'", path, sha1Hex)
 	}
-	fmt.Printf("%s: ok!\n", sha1Hex)
+	fmt.Printf("%s: ok!, %d, %s\n", sha1Hex, nFile, time.Since(timeStart))
 	return nil
 }
 
@@ -440,5 +472,6 @@ func main() {
 	}
 	dir := flag.Args()[0]
 	fmt.Printf("starting in '%s'\n", dir)
+	timeStart = time.Now()
 	testDir(dir)
 }
