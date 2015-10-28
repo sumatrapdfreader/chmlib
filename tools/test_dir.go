@@ -170,7 +170,7 @@ func checkRefFile(path string) error {
 	}
 	idx := lineDiffIndex(lines, expectedLines)
 	if idx != -1 {
-		fmt.Printf("different results for '%s' on line %d\n", sha1Hex, idx)
+		fmt.Printf("different results for '%s' on line %d, file '%s'\n", sha1Hex, idx, path)
 		fmt.Printf("expected: '%s'\n", expectedLines[idx])
 		fmt.Printf("got     : '%s'\n", lines[idx])
 		return fmt.Errorf("mismatch for file '%s' of sha1 '%s'", path, sha1Hex)
