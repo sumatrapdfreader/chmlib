@@ -51,7 +51,6 @@ static uint8_t* extract_entry2(struct chm_file* h, chm_entry* e) {
     return buf;
 }
 
-
 /* return 1 if path ends with '/' */
 static int is_dir(const char* path) {
     size_t n = strlen(path) - 1;
@@ -131,22 +130,22 @@ static int enum_cb(struct chm_file* h, chm_unit_info* ui, void* ctx) {
     return CHM_ENUMERATOR_CONTINUE;
 }
 
-static int test1(const char *file_name) {
-  struct chm_file* h = chm_open(file_name);
-  if (h == NULL) {
-      fprintf(stderr, "failed to open %s\n", file_name);
-      return 1;
-  }
+static int test1(const char* file_name) {
+    struct chm_file* h = chm_open(file_name);
+    if (h == NULL) {
+        fprintf(stderr, "failed to open %s\n", file_name);
+        return 1;
+    }
 
-  if (!chm_enumerate(h, CHM_ENUMERATE_ALL, enum_cb, NULL)) {
-      printf("   *** ERROR ***\n");
-  }
+    if (!chm_enumerate(h, CHM_ENUMERATE_ALL, enum_cb, NULL)) {
+        printf("   *** ERROR ***\n");
+    }
 
-  chm_close(h);
-  return 0;
+    chm_close(h);
+    return 0;
 }
 
-static int process_entry(struct chm_file* h, chm_entry *e) {
+static int process_entry(struct chm_file* h, chm_entry* e) {
     char buf[128] = {0};
     uint8_t sha1[20] = {0};
     char sha1Hex[41] = {0};
@@ -179,29 +178,28 @@ static int process_entry(struct chm_file* h, chm_entry *e) {
         printf("%d,%d,%d,%s,%s,\"%s\"\n", (int)e->space, (int)e->start, (int)e->length, buf,
                sha1Hex, e->path);
     } else {
-        printf("%1d,%d,%d,%s,%s,%s\n", (int)e->space, (int)e->start, (int)e->length, buf,
-               sha1Hex, e->path);
+        printf("%1d,%d,%d,%s,%s,%s\n", (int)e->space, (int)e->start, (int)e->length, buf, sha1Hex,
+               e->path);
     }
     return 0;
 }
 
-static int test2(const char *file_name) {
-  struct chm_file* h = chm_open(file_name);
-  if (h == NULL) {
-      fprintf(stderr, "failed to open %s\n", file_name);
-      return 1;
-  }
+static int test2(const char* file_name) {
+    struct chm_file* h = chm_open(file_name);
+    if (h == NULL) {
+        fprintf(stderr, "failed to open %s\n", file_name);
+        return 1;
+    }
 
-  int n_entries;
-  chm_entry **entries = chm_parse(h, &n_entries);
-  if (entries == 0) {
-      printf("   *** ERROR ***\n");
-  }
-  for (int i = 0; i < n_entries; i++) {
-    process_entry(h, entries[i]);
-  }
-  chm_close(h);
-  return 0;
+    chm_parse_result* res = chm_parse(h);
+    for (int i = 0; i < res->n_entries; i++) {
+        process_entry(h, res->entries[i]);
+    }
+    if (res->err != 0) {
+        printf("   *** ERROR ***\n");
+    }
+    chm_close(h);
+    return 0;
 }
 
 static int use_test1 = 0;
@@ -214,9 +212,9 @@ int main(int c, char** v) {
     int res;
 
     if (use_test1) {
-      res = test1(v[1]);
+        res = test1(v[1]);
     } else {
-      res = test2(v[1]);
+        res = test2(v[1]);
     }
 
     return res;

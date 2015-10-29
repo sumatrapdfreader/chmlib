@@ -193,8 +193,8 @@ typedef struct chm_file {
     int64_t cache_block_indices[MAX_CACHE_BLOCKS];
     int cache_num_blocks;
 
-    chm_entry **entries_cached;
-    int n_entries_cached;
+    chm_parse_result parse_result;
+    int has_parse_result;
 } chm_file;
 
 /* structure of PMGI headers */
@@ -815,14 +815,14 @@ Error:
     return NULL;
 }
 
-static void free_entries(chm_entry *first) {
-  chm_entry *next;
-  chm_entry *e = first;
-  while (e != NULL) {
-    next = e->next;
-    free(e);
-    e = next;
-  }
+static void free_entries(chm_entry* first) {
+    chm_entry* next;
+    chm_entry* e = first;
+    while (e != NULL) {
+        next = e->next;
+        free(e);
+        e = next;
+    }
 }
 
 /* close an ITS archive */
@@ -838,9 +838,11 @@ void chm_close(chm_file* h) {
     for (int i = 0; i < h->cache_num_blocks; i++) {
         free(h->cache_blocks[i]);
     }
-    if (h->entries_cached != NULL) {
-      free_entries(h->entries_cached[0]);
-      free(h->entries_cached);
+    if (h->parse_result.entries != NULL) {
+        if (h->parse_result.n_entries > 0) {
+            free_entries(h->parse_result.entries[0]);
+        }
+        free(h->parse_result.entries);
     }
     free(h);
 }
@@ -1292,10 +1294,8 @@ static int64_t _chm_decompress_region(chm_file* h, uint8_t* buf, int64_t start, 
     return nLen;
 }
 
-
-
-int64_t chm_retrieve_entry(chm_file* h, chm_entry *e, unsigned char* buf, int64_t addr,
-                            int64_t len) {
+int64_t chm_retrieve_entry(chm_file* h, chm_entry* e, unsigned char* buf, int64_t addr,
+                           int64_t len) {
     if (h == NULL)
         return (int64_t)0;
 
@@ -1485,22 +1485,22 @@ static chm_entry* entry_from_ui(chm_unit_info* ui) {
     return res;
 }
 
-chm_entry **chm_parse(chm_file* h, int* n_entries_out) {
+chm_parse_result* chm_parse(chm_file* h) {
     pgml_hdr pgml;
     chm_unit_info ui;
+    int err = 0;
 
-    if (h->entries_cached != NULL) {
-      n_entries_out = h->n_entries_cached;
-      return h->entries_cached;
+    if (h->has_parse_result) {
+        return &h->parse_result;
     }
-    chm_entry **res = NULL;
-    uint8_t* buf = malloc((size_t)h->itsp.block_len);
-    if (buf == NULL)
-        return 0;
 
     int nEntries = 0;
     chm_entry* e;
     chm_entry* last_entry = NULL;
+    uint8_t* buf = malloc((size_t)h->itsp.block_len);
+    if (buf == NULL) {
+        goto Error;
+    }
 
     int32_t curPage = h->itsp.index_head;
 
@@ -1534,25 +1534,27 @@ chm_entry **chm_parse(chm_file* h, int* n_entries_out) {
         curPage = pgml.block_next;
     }
     if (0 == nEntries) {
-      goto Error;
+        goto Error;
     }
-    *n_entries_out = nEntries;
-    res = (chm_entry**)calloc(nEntries, sizeof(chm_entry*));
-    if (res == NULL) {
-      goto Error;
-    }
-    e = last_entry;
-    int n = nEntries - 1;
-    while (e != NULL) {
-      res[n] = e;
-      --n;
-      e = e->next;
+Exit:
+    if (nEntries > 0) {
+        h->parse_result.n_entries = nEntries;
+        chm_entry** entries = (chm_entry**)calloc(nEntries, sizeof(chm_entry*));
+        if (entries != NULL) {
+            h->parse_result.entries = entries;
+            e = last_entry;
+            int n = nEntries - 1;
+            while (e != NULL) {
+                entries[n] = e;
+                --n;
+                e = e->next;
+            }
+        }
     }
     free(buf);
-    return res;
+    h->has_parse_result = 1;
+    return &h->parse_result;
 Error:
-    free_entries(last_entry);
-    free(res);
-    free(buf);
-    return NULL;
+    err = 1;
+    goto Exit;
 }

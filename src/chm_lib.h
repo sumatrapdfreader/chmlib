@@ -116,9 +116,19 @@ typedef struct chm_entry {
     int flags;
 } chm_entry;
 
-chm_entry **chm_parse(struct chm_file* h, int* nEntries);
+typedef struct chm_parse_result {
+    chm_entry** entries;
+    int n_entries;
+    int err; /* 0 means no error */
+} chm_parse_result;
+
+/* result is valid until chm_close().
+It's possible to have an error and partial results.
+*/
+chm_parse_result* chm_parse(struct chm_file* h);
+
 int64_t chm_retrieve_entry(struct chm_file* h, chm_entry* e, unsigned char* buf, int64_t addr,
-                            int64_t len);
+                           int64_t len);
 
 #ifdef __cplusplus
 }
