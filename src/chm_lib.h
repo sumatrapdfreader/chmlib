@@ -117,6 +117,8 @@ typedef struct chm_entry {
 } chm_entry;
 
 chm_entry **chm_parse(struct chm_file* h, int* nEntries);
+int64_t chm_retrieve_entry(struct chm_file* h, chm_entry* e, unsigned char* buf, int64_t addr,
+                            int64_t len);
 
 #ifdef __cplusplus
 }

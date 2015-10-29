@@ -192,6 +192,9 @@ typedef struct chm_file {
     uint8_t* cache_blocks[MAX_CACHE_BLOCKS];
     int64_t cache_block_indices[MAX_CACHE_BLOCKS];
     int cache_num_blocks;
+
+    chm_entry **entries_cached;
+    int n_entries_cached;
 } chm_file;
 
 /* structure of PMGI headers */
@@ -812,6 +815,16 @@ Error:
     return NULL;
 }
 
+static void free_entries(chm_entry *first) {
+  chm_entry *next;
+  chm_entry *e = first;
+  while (e != NULL) {
+    next = e->next;
+    free(e);
+    e = next;
+  }
+}
+
 /* close an ITS archive */
 void chm_close(chm_file* h) {
     if (h == NULL) {
@@ -824,6 +837,10 @@ void chm_close(chm_file* h) {
 
     for (int i = 0; i < h->cache_num_blocks; i++) {
         free(h->cache_blocks[i]);
+    }
+    if (h->entries_cached != NULL) {
+      free_entries(h->entries_cached[0]);
+      free(h->entries_cached);
     }
     free(h);
 }
@@ -1275,6 +1292,52 @@ static int64_t _chm_decompress_region(chm_file* h, uint8_t* buf, int64_t start, 
     return nLen;
 }
 
+
+
+int64_t chm_retrieve_entry(chm_file* h, chm_entry *e, unsigned char* buf, int64_t addr,
+                            int64_t len) {
+    if (h == NULL)
+        return (int64_t)0;
+
+    /* starting address must be in correct range */
+    if (addr >= e->length)
+        return (int64_t)0;
+
+    /* clip length */
+    if (addr + len > e->length)
+        len = e->length - addr;
+
+    if (e->space == CHM_UNCOMPRESSED) {
+        return read_bytes(h, buf, (int64_t)h->itsf.data_offset + (int64_t)e->start + (int64_t)addr,
+                          len);
+    }
+    if (e->space != CHM_COMPRESSED) {
+        return 0;
+    }
+
+    int64_t swath = 0, total = 0;
+
+    /* if compression is not enabled for this file... */
+    if (!h->compression_enabled)
+        return total;
+
+    do {
+        swath = _chm_decompress_region(h, buf, e->start + addr, len);
+
+        if (swath == 0)
+            return total;
+
+        /* update stats */
+        total += swath;
+        len -= swath;
+        addr += swath;
+        buf += swath;
+
+    } while (len != 0);
+
+    return total;
+}
+
 /* retrieve (part of) an object */
 int64_t chm_retrieve_object(chm_file* h, chm_unit_info* ui, unsigned char* buf, int64_t addr,
                             int64_t len) {
@@ -1406,17 +1469,6 @@ int chm_enumerate(chm_file* h, int what, CHM_ENUMERATOR e, void* context) {
     return 1;
 }
 
-#if 0
-typedef struct chm_entry {
-    struct chm_entry* next;
-    char* path;
-    int64_t start;
-    int64_t length;
-    int space;
-    int flags;
-} chm_entry;
-#endif
-
 static chm_entry* entry_from_ui(chm_unit_info* ui) {
     size_t pathLen = strlen(ui->path);
     size_t n = sizeof(chm_entry) + pathLen + 1;
@@ -1437,6 +1489,10 @@ chm_entry **chm_parse(chm_file* h, int* n_entries_out) {
     pgml_hdr pgml;
     chm_unit_info ui;
 
+    if (h->entries_cached != NULL) {
+      n_entries_out = h->n_entries_cached;
+      return h->entries_cached;
+    }
     chm_entry **res = NULL;
     uint8_t* buf = malloc((size_t)h->itsp.block_len);
     if (buf == NULL)
@@ -1495,13 +1551,7 @@ chm_entry **chm_parse(chm_file* h, int* n_entries_out) {
     free(buf);
     return res;
 Error:
-    e = last_entry;
-    chm_entry *next;
-    while (e != NULL) {
-      next = e->next;
-      free(e);
-      e = next;
-    }
+    free_entries(last_entry);
     free(res);
     free(buf);
     return NULL;
