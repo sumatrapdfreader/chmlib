@@ -261,21 +261,21 @@ static int streq(const char* s1, const char* s2) {
 typedef struct unmarshaller {
     uint8_t* d;
     int bytesLeft;
-    int err;
+    int ok;
 } unmarshaller;
 
 static void unmarshaller_init(unmarshaller* u, uint8_t* d, int dLen) {
     u->d = d;
     u->bytesLeft = dLen;
-    u->err = 0;
+    u->ok = true;
 }
 
 static uint8_t* eat_bytes(unmarshaller* u, int n) {
-    if (u->err != 0) {
+    if (!u->ok) {
         return NULL;
     }
     if (u->bytesLeft < n) {
-        u->err = 1;
+        u->ok = false;
         return NULL;
     }
     uint8_t* res = u->d;
@@ -386,8 +386,7 @@ static int _unmarshal_int64(unsigned char** pData, unsigned int* pLenRemain, int
     return 1;
 }
 
-/* returns 0 on error */
-static int unmarshal_itsf_header(unmarshaller* u, itsf_hdr* hdr) {
+static bool unmarshal_itsf_header(unmarshaller* u, itsf_hdr* hdr) {
     get_pchar(u, hdr->signature, 4);
     hdr->version = get_int32(u);
     hdr->header_len = get_int32(u);
@@ -404,7 +403,7 @@ static int unmarshal_itsf_header(unmarshaller* u, itsf_hdr* hdr) {
     int ver = hdr->version;
     if (!(ver == 2 || ver == 3)) {
         dbgprintf("invalid ver %d\n", ver);
-        return 0;
+        return false;
     }
 
     if (ver == 3) {
@@ -413,34 +412,34 @@ static int unmarshal_itsf_header(unmarshaller* u, itsf_hdr* hdr) {
         hdr->data_offset = hdr->dir_offset + hdr->dir_len;
     }
 
-    if (u->err != 0) {
-        return 0;
+    if (!u->ok) {
+        return false;
     }
 
     /* TODO: should also check UUIDs, probably, though with a version 3 file,
      * current MS tools do not seem to use them.
      */
     if (!memeq(hdr->signature, "ITSF", 4)) {
-        return 0;
+        return false;
     }
 
     if (ver == 2 && hdr->header_len < CHM_ITSF_V2_LEN) {
-        return 0;
+        return false;
     }
 
     if (ver == 3 && hdr->header_len < CHM_ITSF_V3_LEN) {
-        return 0;
+        return false;
     }
 
-    /* SumatraPDF: sanity check (huge values are usually due to broken files) */
+    /* sanity check (huge values are usually due to broken files) */
     if (hdr->dir_offset > UINT_MAX || hdr->dir_len > UINT_MAX) {
-        return 0;
+        return false;
     }
 
-    return 1;
+    return true;
 }
 
-static int unmarshal_itsp_header(unmarshaller* u, itsp_hdr* hdr) {
+static bool unmarshal_itsp_header(unmarshaller* u, itsp_hdr* hdr) {
     get_pchar(u, hdr->signature, 4);
     hdr->version = get_int32(u);
     hdr->header_len = get_int32(u);
@@ -457,27 +456,25 @@ static int unmarshal_itsp_header(unmarshaller* u, itsp_hdr* hdr) {
     get_uuid(u, hdr->system_uuid);
     get_puchar(u, hdr->unknown_0044, 16);
 
-    if (u->err != 0) {
-        return 0;
+    if (!u->ok) {
+        return false;
     }
     if (!memeq(hdr->signature, "ITSP", 4)) {
-        return 0;
+        return false;
     }
     if (hdr->version != 1) {
-        return 0;
+        return false;
     }
     if (hdr->header_len != CHM_ITSP_V1_LEN) {
-        return 0;
+        return false;
     }
-    /* SumatraPDF: sanity check */
     if (hdr->block_len == 0) {
-        return 0;
+        return false;
     }
-    return 1;
+    return true;
 }
 
 static int unmarshal_pmgl_header(unmarshaller* u, unsigned int blockLen, pgml_hdr* hdr) {
-    /* SumatraPDF: sanity check */
     if (blockLen < CHM_PMGL_LEN)
         return 0;
 
@@ -490,7 +487,6 @@ static int unmarshal_pmgl_header(unmarshaller* u, unsigned int blockLen, pgml_hd
     if (!memeq(hdr->signature, _chm_pmgl_marker, 4)) {
         return 0;
     }
-    /* SumatraPDF: sanity check */
     if (hdr->free_space > blockLen - CHM_PMGL_LEN) {
         return 0;
     }
@@ -569,11 +565,11 @@ static int64_t read_bytes(chm_file* h, uint8_t* buf, int64_t off, int64_t len) {
     return n;
 }
 
-static int is_null_or_compressed(chm_entry* e) {
+static bool is_null_or_compressed(chm_entry* e) {
     return (e == NULL) || (e->space == CHM_COMPRESSED);
 }
 
-int chm_init(chm_file* h, chm_reader read_func, void* read_ctx) {
+bool chm_init(chm_file* h, chm_reader read_func, void* read_ctx) {
     unsigned char buf[256];
     unsigned int n;
     unsigned char* tmp;
@@ -671,10 +667,10 @@ int chm_init(chm_file* h, chm_reader read_func, void* read_ctx) {
     }
 
     chm_set_cache_size(h, CHM_MAX_BLOCKS_CACHED);
-    return 1;
+    return true;
 Error:
     chm_close(h);
-    return 0;
+    return false;
 }
 
 static void free_entries(chm_entry* first) {
@@ -764,36 +760,35 @@ static uint8_t* alloc_cached_block(chm_file* h, int64_t nBlock) {
     return h->cache_blocks[idx];
 }
 
-/* copy n bytes out of u into dst and zero-terminate dst
-   return 0 on failure */
-static int copy_string(unmarshaller* u, int n, char* dst) {
+/* copy n bytes out of u into dst and zero-terminate dst */
+static bool copy_string(unmarshaller* u, int n, char* dst) {
     uint8_t* d = eat_bytes(u, n);
     if (d == NULL) {
-        return 0;
+        return false;
     }
     memcpy(dst, d, n);
     dst[n] = 0;
-    return 1;
+    return true;
 }
 
-static int chm_parse_pmgl_entry(unmarshaller* u, chm_unit_info* ui) {
+static bool chm_parse_pmgl_entry(unmarshaller* u, chm_unit_info* ui) {
     int n = (int)get_cword(u);
-    if (n > CHM_MAX_PATHLEN || u->err != 0) {
-        return 0;
+    if (n > CHM_MAX_PATHLEN || !u->ok) {
+        return false;
     }
 
     if (!copy_string(u, n, ui->path)) {
-        return 0;
+        return false;
     }
 
     ui->space = (int)get_cword(u);
     ui->start = get_cword(u);
     ui->length = get_cword(u);
 
-    if (u->err != 0) {
-        return 0;
+    if (!u->ok) {
+        return false;
     }
-    return 1;
+    return true;
 }
 
 static bool get_int64_at_off(chm_file* h, int64_t off, int64_t* n_out) {
@@ -804,7 +799,7 @@ static bool get_int64_at_off(chm_file* h, int64_t off, int64_t* n_out) {
     unmarshaller u;
     unmarshaller_init(&u, buf, 8);
     uint64_t n = get_int64(&u);
-    if (u.err != 0) {
+    if (!u.ok) {
         return false;
     }
     *n_out = n;
@@ -812,25 +807,25 @@ static bool get_int64_at_off(chm_file* h, int64_t off, int64_t* n_out) {
 }
 
 /* get the bounds of a compressed block.  return 0 on failure */
-static int _chm_get_cmpblock_bounds(chm_file* h, int64_t block, int64_t* start, int64_t* len) {
+static bool _chm_get_cmpblock_bounds(chm_file* h, int64_t block, int64_t* start, int64_t* len) {
     int64_t end;
     /* for all but the last block, use the reset table */
     if (block < h->reset_table.block_count - 1) {
         int64_t off = (int64_t)h->itsf.data_offset + (int64_t)h->rt_unit->start +
                       (int64_t)h->reset_table.table_offset + (int64_t)block * 8;
         if (!get_int64_at_off(h, off, start)) {
-            return 0;
+            return false;
         }
         off += 8;
         if (!get_int64_at_off(h, off, &end)) {
-            return 0;
+            return false;
         }
     } else {
         /* for the last block, use the span in addition to the reset table */
         int64_t off = (int64_t)h->itsf.data_offset + (int64_t)h->rt_unit->start +
                       (int64_t)h->reset_table.table_offset + (int64_t)block * 8;
         if (!get_int64_at_off(h, off, start)) {
-            return 0;
+            return false;
         }
         end = h->reset_table.compressed_len;
     }
@@ -838,7 +833,7 @@ static int _chm_get_cmpblock_bounds(chm_file* h, int64_t block, int64_t* start, 
     /* compute the length and absolute start address */
     *len = end - *start;
     *start += h->itsf.data_offset + h->cn_unit->start;
-    return 1;
+    return true;
 }
 
 static uint8_t* uncompress_block(chm_file* h, int64_t nBlock) {

@@ -33,7 +33,7 @@ static uint8_t* extract_entry(struct chm_file* h, chm_entry* e) {
 }
 
 /* return 1 if s contains ',' */
-static int needs_csv_escaping(const char* s) {
+static bool needs_csv_escaping(const char* s) {
     while (*s && (*s != ',')) {
         s++;
     }
@@ -55,7 +55,7 @@ static void sha1_to_hex(uint8_t* sha1, char* sha1Hex) {
     }
 }
 
-static int process_entry(struct chm_file* h, chm_entry* e) {
+static bool process_entry(struct chm_file* h, chm_entry* e) {
     char buf[128] = {0};
     uint8_t sha1[20] = {0};
     char sha1Hex[41] = {0};
@@ -78,7 +78,7 @@ static int process_entry(struct chm_file* h, chm_entry* e) {
             int err = sha1_process_all(d, (unsigned long)e->length, sha1);
             free(d);
             if (err != CRYPT_OK) {
-                return 1;
+                return false;
             }
         }
     }
@@ -91,34 +91,32 @@ static int process_entry(struct chm_file* h, chm_entry* e) {
         printf("%1d,%d,%d,%s,%s,%s\n", (int)e->space, (int)e->start, (int)e->length, buf, sha1Hex,
                e->path);
     }
-    return 0;
+    return true;
 }
 
 /* returns 0 if ok, != 0 on error */
-static int test_chm(chm_file* h) {
+static bool test_chm(chm_file* h) {
     chm_parse_result* res = chm_parse(h);
-    int err = 0;
     for (int i = 0; i < res->n_entries; i++) {
-        err = process_entry(h, res->entries[i]);
-        if (err != 0) {
+        if (!process_entry(h, res->entries[i])) {
             printf("   *** ERROR ***\n");
-            break;
+            return false;
         }
     }
-    return err;
+    return true;
 }
 
-static int test_fd(const char* path) {
+static bool test_fd(const char* path) {
     fd_reader_ctx ctx;
     if (!fd_reader_init(&ctx, path)) {
         fprintf(stderr, "failed to open %s\n", path);
-        return 1;
+        return false;
     }
     chm_file f;
-    int ok = chm_init(&f, fd_reader, &ctx);
+    bool ok = chm_init(&f, fd_reader, &ctx);
     if (!ok) {
         fd_reader_close(&ctx);
-        return 1;
+        return false;
     }
     ok = test_chm(&f);
     chm_close(&f);
@@ -126,7 +124,7 @@ static int test_fd(const char* path) {
     return ok;
 }
 
-static int show_dbg_out = 0;
+static bool show_dbg_out = false;
 
 static void dbg_print(const char* s) {
     fprintf(stderr, "%s", s);
@@ -140,5 +138,9 @@ int main(int c, char** v) {
     if (show_dbg_out) {
         chm_set_dbgprint(dbg_print);
     }
-    return test_fd(v[1]);
+    bool ok = test_fd(v[1]);
+    if (ok) {
+      return 0;
+    }
+    return 1;
 }

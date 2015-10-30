@@ -200,7 +200,7 @@ void chm_close(struct chm_file* h);
 
 void chm_set_cache_size(struct chm_file* h, int nCacheBlocks);
 
-int chm_init(struct chm_file* f, chm_reader read_func, void* read_ctx);
+bool chm_init(struct chm_file* f, chm_reader read_func, void* read_ctx);
 
 /* allow intercepting debug messages from the code */
 typedef void (*dbgprintfunc)(const char* s);
