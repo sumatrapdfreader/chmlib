@@ -61,6 +61,22 @@ extern "C" {
 /* structure representing an ITS (CHM) file stream             */
 struct chm_file;
 
+/*
+chm_reader is a function that reads from an abstract reader interface (e.g. a file)
+Reads len bytes from offset off and copies them into buf. Buf must be at least len in size.
+Returns number of bytes read, -1 on error.
+ctx is opaque object that allows different implementations */
+typedef int64_t (*chm_reader)(void *ctx, void *buf, int64_t off, int64_t len);
+
+typedef struct mem_reader_ctx {
+  void *data;
+  int64_t size;
+} mem_reader_ctx;
+
+void mem_reader_init(mem_reader_ctx *ctx, void *data, int64_t size);
+int64_t mem_reader(mem_reader_ctx *ctx, void *buf, int64_t off, int64_t len);
+
+
 /* structure representing an element from an ITS file stream   */
 #define CHM_MAX_PATHLEN 512
 typedef struct chm_unit_info {

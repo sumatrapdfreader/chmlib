@@ -158,6 +158,25 @@ struct chmLzxcControlData {
 
 #define MAX_CACHE_BLOCKS 128
 
+void mem_reader_init(mem_reader_ctx *ctx, void *data, int64_t size) {
+  ctx->data = data;
+  ctx->size = size;
+}
+
+int64_t mem_reader(mem_reader_ctx *ctx, void *buf, int64_t off, int64_t len) {
+  int64_t toReadMax = ctx->size - off;
+  if (toReadMax <= 0) {
+    return -1;
+  }
+  if (len > toReadMax) {
+    len = toReadMax;
+  }
+  char *d = (char*)ctx->data;
+  d += off;
+  memcpy(buf, d, len);
+  return len;
+}
+
 /* the structure used for chm file handles */
 typedef struct chm_file {
 #ifdef WIN32
