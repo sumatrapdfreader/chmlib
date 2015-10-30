@@ -667,7 +667,7 @@ static bool copy_string(unmarshaller* u, int n, char* dst) {
     return true;
 }
 
-static bool chm_parse_pmgl_entry(unmarshaller* u, chm_unit_info* ui) {
+static bool parse_pmgl_entry(unmarshaller* u, chm_unit_info* ui) {
     int n = (int)get_cword(u);
     if (n > CHM_MAX_PATHLEN || !u->ok) {
         return false;
@@ -702,31 +702,23 @@ static bool get_int64_at_off(chm_file* h, int64_t off, int64_t* n_out) {
     return true;
 }
 
-/* get the bounds of a compressed block.  return 0 on failure */
-static bool _chm_get_cmpblock_bounds(chm_file* h, int64_t block, int64_t* start, int64_t* len) {
-    int64_t end;
+/* get the bounds of a compressed block.  return false on failure */
+static bool get_cmpblock_bounds(chm_file* h, int64_t block, int64_t* start, int64_t* len) {
+    int64_t off = (int64_t)h->itsf.data_offset + (int64_t)h->rt_unit->start +
+                  (int64_t)h->reset_table.table_offset + (int64_t)block * 8;
+    if (!get_int64_at_off(h, off, start)) {
+        return false;
+    }
+
     /* for all but the last block, use the reset table */
+    int64_t end = h->reset_table.compressed_len;
     if (block < h->reset_table.block_count - 1) {
-        int64_t off = (int64_t)h->itsf.data_offset + (int64_t)h->rt_unit->start +
-                      (int64_t)h->reset_table.table_offset + (int64_t)block * 8;
-        if (!get_int64_at_off(h, off, start)) {
-            return false;
-        }
         off += 8;
         if (!get_int64_at_off(h, off, &end)) {
             return false;
         }
-    } else {
-        /* for the last block, use the span in addition to the reset table */
-        int64_t off = (int64_t)h->itsf.data_offset + (int64_t)h->rt_unit->start +
-                      (int64_t)h->reset_table.table_offset + (int64_t)block * 8;
-        if (!get_int64_at_off(h, off, start)) {
-            return false;
-        }
-        end = h->reset_table.compressed_len;
     }
 
-    /* compute the length and absolute start address */
     *len = end - *start;
     *start += h->itsf.data_offset + h->cn_unit->start;
     return true;
@@ -755,7 +747,7 @@ static uint8_t* uncompress_block(chm_file* h, int64_t nBlock) {
 
     dbgprintf("Decompressing block #%4d (EXTRA)\n", nBlock);
     int64_t cmpStart, cmpLen;
-    if (!_chm_get_cmpblock_bounds(h, nBlock, &cmpStart, &cmpLen)) {
+    if (!get_cmpblock_bounds(h, nBlock, &cmpStart, &cmpLen)) {
         goto Error;
     }
     if (cmpLen < 0 || cmpLen > (int64_t)blockSize + 6144) {
@@ -781,7 +773,7 @@ Error:
     return NULL;
 }
 
-static int64_t _chm_decompress_block(chm_file* h, int64_t nBlock, uint8_t** ubuffer) {
+static int64_t decompress_block(chm_file* h, int64_t nBlock, uint8_t** ubuffer) {
     uint32_t blockAlign = ((uint32_t)nBlock % h->reset_blkcount); /* reset intvl. aln. */
 
     /* let the caching system pull its weight! */
@@ -810,7 +802,7 @@ static int64_t _chm_decompress_block(chm_file* h, int64_t nBlock, uint8_t** ubuf
 }
 
 /* grab a region from a compressed block */
-static int64_t _chm_decompress_region(chm_file* h, uint8_t* buf, int64_t start, int64_t len) {
+static int64_t decompress_region(chm_file* h, uint8_t* buf, int64_t start, int64_t len) {
     uint8_t* ubuffer;
 
     if (len <= 0)
@@ -835,7 +827,7 @@ static int64_t _chm_decompress_region(chm_file* h, uint8_t* buf, int64_t start, 
         h->lzx_state = LZXinit(window_size);
     }
 
-    int64_t gotLen = _chm_decompress_block(h, nBlock, &ubuffer);
+    int64_t gotLen = decompress_block(h, nBlock, &ubuffer);
     if (gotLen == (int64_t)-1) {
         return 0;
     }
@@ -873,7 +865,7 @@ int64_t chm_retrieve_entry(chm_file* h, chm_entry* e, unsigned char* buf, int64_
         return total;
 
     do {
-        swath = _chm_decompress_region(h, buf, e->start + addr, len);
+        swath = decompress_region(h, buf, e->start + addr, len);
 
         if (swath == 0)
             return total;
@@ -953,7 +945,7 @@ static bool parse_entries(chm_file* h) {
 
         /* decode all entries in this page */
         while (u.bytesLeft > 0) {
-            if (!chm_parse_pmgl_entry(&u, &ui)) {
+            if (!parse_pmgl_entry(&u, &ui)) {
                 goto Error;
             }
             ui.flags = flags_from_path(ui.path);
@@ -988,14 +980,13 @@ Exit:
     }
     free(buf);
     if (h->parse_entries_failed || n_entries == 0) {
-      return false;
+        return false;
     }
     return true;
 Error:
     h->parse_entries_failed = true;
     goto Exit;
 }
-
 
 bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
     unsigned char buf[256];
@@ -1036,6 +1027,8 @@ bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
     h->dir_len = h->itsf.dir_len;
     h->dir_len -= h->itsp.header_len;
 
+    chm_set_cache_size(h, CHM_MAX_BLOCKS_CACHED);
+
     /* if the index root is -1, this means we don't have any PMGI blocks.
      * as a result, we must use the sole PMGL block as the index root
      */
@@ -1046,7 +1039,7 @@ bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
 
     parse_entries(h);
     if (h->n_entries == 0) {
-      goto Error;
+        goto Error;
     }
 
     for (int i = 0; i < h->n_entries; i++) {
@@ -1095,7 +1088,6 @@ bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
         }
     }
 
-    chm_set_cache_size(h, CHM_MAX_BLOCKS_CACHED);
     return true;
 Error:
     chm_close(h);

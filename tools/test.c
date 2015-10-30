@@ -102,7 +102,7 @@ static bool test_chm(chm_file* h) {
         }
     }
     if (h->parse_entries_failed) {
-      printf("   *** ERROR ***\n");
+        printf("   *** ERROR ***\n");
     }
     return true;
 }
@@ -141,7 +141,7 @@ int main(int c, char** v) {
     }
     bool ok = test_fd(v[1]);
     if (ok) {
-      return 0;
+        return 0;
     }
     return 1;
 }
