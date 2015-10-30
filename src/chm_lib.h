@@ -58,8 +58,11 @@ extern "C" {
 #define CHM_UNCOMPRESSED 0
 #define CHM_COMPRESSED 1
 
-/* structure representing an ITS (CHM) file stream             */
-struct chm_file;
+#define CHM_ENUMERATE_NORMAL 1
+#define CHM_ENUMERATE_META 2
+#define CHM_ENUMERATE_SPECIAL 4
+#define CHM_ENUMERATE_FILES 8
+#define CHM_ENUMERATE_DIRS 16
 
 /*
 chm_reader is a function that reads from an abstract reader interface (e.g. a file)
@@ -92,16 +95,6 @@ void win_reader_close(win_reader_ctx* ctx);
 int64_t win_reader(void* ctx, void* buf, int64_t off, int64_t len);
 
 #endif
-
-/* structure representing an element from an ITS file stream   */
-#define CHM_MAX_PATHLEN 512
-typedef struct chm_unit_info {
-    int64_t start;
-    int64_t length;
-    int space;
-    int flags;
-    char path[CHM_MAX_PATHLEN + 1];
-} chm_unit_info;
 
 /* structure of ITSF headers */
 typedef struct itsf_hdr {
@@ -177,8 +170,9 @@ typedef struct chm_file {
     int64_t dir_offset;
     int64_t dir_len;
 
-    chm_unit_info rt_unit;
-    chm_unit_info cn_unit;
+    chm_entry* rt_unit;
+    chm_entry* cn_unit;
+
     struct chmLzxcResetTable reset_table;
 
     /* LZX control data */
@@ -205,23 +199,6 @@ void chm_close(struct chm_file* h);
 
 void chm_set_cache_size(struct chm_file* h, int nCacheBlocks);
 
-/* resolve a particular object from the archive */
-#define CHM_RESOLVE_SUCCESS 0
-#define CHM_RESOLVE_FAILURE 1
-int chm_resolve_object(struct chm_file* h, const char* objPath, chm_unit_info* ui);
-
-/* retrieve part of an object from the archive */
-int64_t chm_retrieve_object(struct chm_file* h, chm_unit_info* ui, unsigned char* buf, int64_t addr,
-                            int64_t len);
-
-#define CHM_ENUMERATE_NORMAL 1
-#define CHM_ENUMERATE_META 2
-#define CHM_ENUMERATE_SPECIAL 4
-#define CHM_ENUMERATE_FILES 8
-#define CHM_ENUMERATE_DIRS 16
-
-/* new API */
-
 int chm_init(struct chm_file* f, chm_reader read_func, void* read_ctx);
 
 /* allow intercepting debug messages from the code */
@@ -233,6 +210,7 @@ It's possible to have an error and partial results.
 */
 chm_parse_result* chm_parse(struct chm_file* h);
 
+/* retrieve part of an entry from the archive */
 int64_t chm_retrieve_entry(struct chm_file* h, chm_entry* e, unsigned char* buf, int64_t addr,
                            int64_t len);
 
