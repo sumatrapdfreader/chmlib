@@ -301,11 +301,9 @@ static uint64_t get_uint64(unmarshaller* u) {
     return get_uint_n(u, (int)sizeof(uint64_t));
 }
 
-#if 0
 static uint64_t get_int64(unmarshaller* u) {
     return (int64_t)get_uint64(u);
 }
-#endif
 
 static uint32_t get_uint32(unmarshaller* u) {
     return get_uint_n(u, sizeof(uint32_t));
@@ -373,22 +371,6 @@ static int _unmarshal_uint32(unsigned char** pData, unsigned int* pLenRemain, ui
 }
 
 static int _unmarshal_int64(unsigned char** pData, unsigned int* pLenRemain, int64_t* dest) {
-    int64_t temp;
-    int i;
-    if (8 > *pLenRemain)
-        return 0;
-    temp = 0;
-    for (i = 8; i > 0; i--) {
-        temp <<= 8;
-        temp |= (*pData)[i - 1];
-    }
-    *dest = temp;
-    *pData += 8;
-    *pLenRemain -= 8;
-    return 1;
-}
-
-static int _unmarshal_uint64(unsigned char** pData, unsigned int* pLenRemain, int64_t* dest) {
     int64_t temp;
     int i;
     if (8 > *pLenRemain)
@@ -526,9 +508,9 @@ static int _unmarshal_lzxc_reset_table(unsigned char** pData, unsigned int* pDat
     _unmarshal_uint32(pData, pDataLen, &dest->block_count);
     _unmarshal_uint32(pData, pDataLen, &dest->unknown);
     _unmarshal_uint32(pData, pDataLen, &dest->table_offset);
-    _unmarshal_uint64(pData, pDataLen, &dest->uncompressed_len);
-    _unmarshal_uint64(pData, pDataLen, &dest->compressed_len);
-    _unmarshal_uint64(pData, pDataLen, &dest->block_len);
+    _unmarshal_int64(pData, pDataLen, &dest->uncompressed_len);
+    _unmarshal_int64(pData, pDataLen, &dest->compressed_len);
+    _unmarshal_int64(pData, pDataLen, &dest->block_len);
 
     if (dest->version != 2)
         return 0;
@@ -814,47 +796,48 @@ static int chm_parse_pmgl_entry(unmarshaller* u, chm_unit_info* ui) {
     return 1;
 }
 
+static bool get_int64_at_off(chm_file* h, int64_t off, int64_t* n_out) {
+    uint8_t buf[8];
+    if (read_bytes(h, buf, off, 8) != 8) {
+        return false;
+    }
+    unmarshaller u;
+    unmarshaller_init(&u, buf, 8);
+    uint64_t n = get_int64(&u);
+    if (u.err != 0) {
+        return false;
+    }
+    *n_out = n;
+    return true;
+}
+
 /* get the bounds of a compressed block.  return 0 on failure */
 static int _chm_get_cmpblock_bounds(chm_file* h, int64_t block, int64_t* start, int64_t* len) {
-    uint8_t buffer[8], *dummy;
-    unsigned int remain;
-
+    int64_t end;
     /* for all but the last block, use the reset table */
     if (block < h->reset_table.block_count - 1) {
-        /* unpack the start address */
-        dummy = buffer;
-        remain = 8;
         int64_t off = (int64_t)h->itsf.data_offset + (int64_t)h->rt_unit->start +
                       (int64_t)h->reset_table.table_offset + (int64_t)block * 8;
-        if (read_bytes(h, buffer, off, remain) != remain ||
-            !_unmarshal_uint64(&dummy, &remain, start))
+        if (!get_int64_at_off(h, off, start)) {
             return 0;
-
-        /* unpack the end address */
-        dummy = buffer;
-        remain = 8;
-        off = (int64_t)h->itsf.data_offset + (int64_t)h->rt_unit->start +
-              (int64_t)h->reset_table.table_offset + (int64_t)block * 8 + 8;
-        if (read_bytes(h, buffer, off, remain) != remain || !_unmarshal_int64(&dummy, &remain, len))
+        }
+        off += 8;
+        if (!get_int64_at_off(h, off, &end)) {
             return 0;
+        }
     } else {
         /* for the last block, use the span in addition to the reset table */
-        /* unpack the start address */
-        dummy = buffer;
-        remain = 8;
         int64_t off = (int64_t)h->itsf.data_offset + (int64_t)h->rt_unit->start +
                       (int64_t)h->reset_table.table_offset + (int64_t)block * 8;
-        if (read_bytes(h, buffer, off, remain) != remain ||
-            !_unmarshal_uint64(&dummy, &remain, start))
+        if (!get_int64_at_off(h, off, start)) {
             return 0;
-
-        *len = h->reset_table.compressed_len;
+        }
+        end = h->reset_table.compressed_len;
     }
 
     /* compute the length and absolute start address */
-    *len -= *start;
+    *len = end - *start;
     *start += h->itsf.data_offset + h->cn_unit->start;
-
     return 1;
 }
 

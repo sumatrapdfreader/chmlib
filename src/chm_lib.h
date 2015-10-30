@@ -47,6 +47,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #ifdef WIN32
 #include <wtypes.h>
