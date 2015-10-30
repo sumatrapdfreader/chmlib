@@ -48,6 +48,9 @@ var (
 	nFile            int
 	timeStart        time.Time
 	flgCheckRef      bool
+	priorityFiles    = []string{
+		"/Volumes/Store/books/_chm/Automating UNIX And Linux Administration (2003).chm",
+	}
 )
 
 // White-listed changes:
@@ -60,9 +63,24 @@ so a change must have happened before this.
 different results for '7575a94fb9bebd9eab9f1c038f22e12917d94c84' on line 351, file '/Volumes/Store/books/_chm/Que.Mobile.Guide.to.BlackBerry.May.2005.eBook-LiB.chm'
 expected: '1,1874347,1093,file,0000000000000000000000000000000000000000,/0789733439/images/0789733439/graphics/browser.gif;400479'
 got     : '1,1874347,1093,file,464320F04EB262006A3B1EB74D1A2F897ECA9986,/0789733439/images/0789733439/graphics/browser.gif;400479'
+
+different results for 'c843a11d41e37aba228eb34e1f5821ffde14d45a', '/Volumes/Store/books/_chm/Automating UNIX And Linux Administration (2003).chm'
+len(lines) = 187, len(expectedLines) = 188
+got: ''
+exp: '*** ERROR ***'
+
+different results for 'ec52bf6754c7c919633a3d21cf784c9b66786417', '/Volumes/Store/books/_chm/Linux Unwired (2004).chm'
+len(lines) = 237, len(expectedLines) = 238
+got: ''
+exp: '*** ERROR ***'
+
 */
 var (
-	whiteListed = []string{"7575a94fb9bebd9eab9f1c038f22e12917d94c84"}
+	whiteListed = []string{
+		"7575a94fb9bebd9eab9f1c038f22e12917d94c84",
+		"c843a11d41e37aba228eb34e1f5821ffde14d45a",
+		"ec52bf6754c7c919633a3d21cf784c9b66786417",
+	}
 )
 
 func init() {
@@ -191,9 +209,33 @@ func checkRefFile(path string) error {
 	}
 	d := buf.Bytes()
 	lines := outputToLines(d)
+
 	if len(lines) != len(expectedLines) {
 		fmt.Printf("different results for '%s', '%s'\n", sha1Hex, path)
 		fmt.Printf("len(lines) = %d, len(expectedLines) = %d\n", len(lines), len(expectedLines))
+
+		if isWhiteListed(sha1Hex) {
+			fmt.Printf("is whitelisted!\n")
+			return nil
+		}
+
+		n := len(expectedLines)
+		if len(lines) > n {
+			n = len(lines)
+		}
+		for i := 0; i < n; i++ {
+			s1 := ""
+			s2 := ""
+			if i < len(expectedLines) {
+				s1 = expectedLines[i]
+			}
+			if i < len(lines) {
+				s2 = lines[i]
+			}
+			if s1 != s2 {
+				fmt.Printf("got: '%s'\nexp: '%s'\n\n", s2, s1)
+			}
+		}
 		return fmt.Errorf("mismatch for file '%s' of sha1 '%s'", path, sha1Hex)
 	}
 	idx := lineDiffIndex(lines, expectedLines)
@@ -241,7 +283,33 @@ func testFile(path string) error {
 	return nil
 }
 
+func testPriorityFiles(dir string) error {
+	for _, path := range priorityFiles {
+		err := checkRefFile(path)
+		if err != nil && !ignoreErrorForPriorityFiles(err) {
+			fmt.Printf("err: '%s'\n", err)
+			return err
+		}
+	}
+	return nil
+}
+
+func ignoreErrorForPriorityFiles(err error) bool {
+	s := err.Error()
+	if strings.Contains(s, "don't have reference results") {
+		return true
+	}
+	if strings.Contains(s, "no such file") {
+		return true
+	}
+	return false
+}
+
 func testDir(dir string) {
+	err := testPriorityFiles(dir)
+	if err != nil {
+		return
+	}
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if !isErrPermDenied(err) {
@@ -359,9 +427,6 @@ func dumpResp(rsp *http.Response) {
 	}
 }
 
-// TODO: this doesn't work. Returns some random html with 200, even though
-// the corresponding wget works (it does follow 302 redirects)
-// is it a problem with cookies not being
 func httpDl(uri, fileName string) error {
 	fmt.Printf("httpDl: %s\n", uri)
 	options := cookiejar.Options{

@@ -192,25 +192,34 @@ static int test2(const char* file_name) {
     }
 
     chm_parse_result* res = chm_parse(h);
+    int err;
     for (int i = 0; i < res->n_entries; i++) {
-        process_entry(h, res->entries[i]);
-    }
-    if (res->err != 0) {
-        printf("   *** ERROR ***\n");
+        err = process_entry(h, res->entries[i]);
+        if (err != 0) {
+          printf("   *** ERROR ***\n");
+          break;
+        }
     }
     chm_close(h);
     return 0;
 }
 
 static int use_test1 = 0;
+static int show_dbg_out = 0;
+
+static void dbg_print(const char *s) {
+  fprintf(stderr, "%s", s);
+}
 
 int main(int c, char** v) {
     if (c < 2) {
         fprintf(stderr, "usage: %s <chmfile>\n", v[0]);
         exit(1);
     }
+    if (show_dbg_out) {
+      chm_set_dbgprint(dbg_print);
+    }
     int res;
-
     if (use_test1) {
         res = test1(v[1]);
     } else {

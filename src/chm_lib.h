@@ -107,6 +107,10 @@ int chm_enumerate(struct chm_file* h, int what, CHM_ENUMERATOR e, void* context)
 
 /* new API */
 
+/* allow intercepting debug messages from the code */
+typedef void (*dbgprintfunc)(const char *s);
+void chm_set_dbgprint(dbgprintfunc f);
+
 typedef struct chm_entry {
     struct chm_entry* next;
     char* path;

@@ -49,6 +49,7 @@
 #include <string.h>
 #include <limits.h>
 #include <stdio.h>
+#include <stdarg.h>
 
 #ifdef WIN32
 #include <windows.h>
@@ -67,8 +68,6 @@
 
 #include "chm_lib.h"
 #include "lzx.h"
-
-//#define CHM_DEBUG 1
 
 #ifndef CHM_MAX_BLOCKS_CACHED
 #define CHM_MAX_BLOCKS_CACHED 5
@@ -206,6 +205,9 @@ struct chmPmgiHeader {
 };                       /* __attribute__ ((aligned (1))); */
 
 #if defined(WIN32)
+/* TODO: http://download.redis.io/redis-stable/deps/jemalloc/include/msvc_compat/strings.h
+https://msdn.microsoft.com/en-us/library/fbxyd7zd.aspx
+*/
 static int ffs(unsigned int val) {
     int bit = 1, idx = 1;
     while (bit != 0 && (val & bit) == 0) {
@@ -217,19 +219,24 @@ static int ffs(unsigned int val) {
     else
         return idx;
 }
-
 #endif
 
-#if defined(CHM_DEBUG)
-#define dbgprintf(...) fprintf(stderr, __VA_ARGS__);
-#else
-static void dbgprintf(const char* fmt, ...) {
-    (void)fmt;
+static dbgprintfunc g_dbg_print = NULL;
+
+void chm_set_dbgprint(dbgprintfunc f) {
+  g_dbg_print = f;
 }
-#endif
 
-static int memeq(const void* d1, const void* d2, size_t n) {
-    return memcmp(d1, d2, n) == 0;
+static void dbgprintf(const char* fmt, ...) {
+    if (g_dbg_print == NULL) {
+      return;
+    }
+    char buf[4096] = { 0 };
+    va_list args;
+    va_start(args, fmt);
+    /* TODO: vsnprintf_s if MSVC */
+    vsnprintf(buf, sizeof(buf)-1, fmt, args);
+    g_dbg_print(buf);
 }
 
 #if 0
@@ -240,6 +247,10 @@ static void hexprint(uint8_t* d, int n) {
     dbgprintf("\n");
 }
 #endif
+
+static int memeq(const void* d1, const void* d2, size_t n) {
+    return memcmp(d1, d2, n) == 0;
+}
 
 typedef struct unmarshaller {
     uint8_t* d;
@@ -1555,6 +1566,7 @@ Exit:
     h->has_parse_result = 1;
     return &h->parse_result;
 Error:
+
     err = 1;
     goto Exit;
 }
