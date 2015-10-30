@@ -94,7 +94,6 @@ typedef struct win_reader_ctx { HANDLE fh; } win_reader_ctx;
 int win_reader_init(win_reader_ctx* ctx, const WCHAR* path);
 void win_reader_close(win_reader_ctx* ctx);
 int64_t win_reader(void* ctx, void* buf, int64_t off, int64_t len);
-
 #endif
 
 /* structure of ITSF headers */
@@ -133,7 +132,7 @@ typedef struct itsp_hdr {
     uint8_t unknown_0044[16]; /* 44 */
 } itsp_hdr;
 
-struct chmLzxcResetTable {
+typedef struct lzxc_reset_table {
     uint32_t version;
     uint32_t block_count;
     uint32_t unknown;
@@ -141,7 +140,7 @@ struct chmLzxcResetTable {
     int64_t uncompressed_len;
     int64_t compressed_len;
     int64_t block_len;
-};
+} lzxc_reset_table;
 
 typedef struct chm_entry {
     struct chm_entry* next;
@@ -168,7 +167,7 @@ typedef struct chm_file {
     chm_entry* rt_unit;
     chm_entry* cn_unit;
 
-    struct chmLzxcResetTable reset_table;
+    lzxc_reset_table reset_table;
 
     /* LZX control data */
     bool compression_enabled;

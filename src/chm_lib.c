@@ -77,15 +77,7 @@
 #define CHM_ITSF_V3_LEN 0x60
 #define CHM_ITSP_V1_LEN 0x54
 
-/* structure representing an element from an ITS file stream   */
 #define CHM_MAX_PATHLEN 512
-typedef struct chm_unit_info {
-    int64_t start;
-    int64_t length;
-    int space;
-    int flags;
-    char path[CHM_MAX_PATHLEN + 1];
-} chm_unit_info;
 
 /* structure of PMGL headers */
 static const char _chm_pmgl_marker[4] = "PMGL";
@@ -317,20 +309,20 @@ static int32_t get_int32(unmarshaller* u) {
     return (int32_t)get_uint32(u);
 }
 
-static void get_pchar(unmarshaller* u, char* dst, int nBytes) {
-    uint8_t* d = eat_bytes(u, nBytes);
+static void get_pchar(unmarshaller* u, char* dst, int n) {
+    uint8_t* d = eat_bytes(u, n);
     if (d == NULL) {
         return;
     }
-    memcpy(dst, (char*)d, nBytes);
+    memcpy(dst, (char*)d, n);
 }
 
-static void get_puchar(unmarshaller* u, uint8_t* dst, int nBytes) {
-    uint8_t* d = eat_bytes(u, nBytes);
+static void get_puchar(unmarshaller* u, uint8_t* dst, int n) {
+    uint8_t* d = eat_bytes(u, n);
     if (d == NULL) {
         return;
     }
-    memcpy((char*)dst, (char*)d, nBytes);
+    memcpy((char*)dst, (char*)d, n);
 }
 
 static void get_uuid(unmarshaller* u, uint8_t* dst) {
@@ -442,9 +434,9 @@ static bool unmarshal_itsp_header(unmarshaller* u, itsp_hdr* hdr) {
     return true;
 }
 
-static int unmarshal_pmgl_header(unmarshaller* u, unsigned int blockLen, pgml_hdr* hdr) {
+static bool unmarshal_pmgl_header(unmarshaller* u, unsigned int blockLen, pgml_hdr* hdr) {
     if (blockLen < CHM_PMGL_LEN)
-        return 0;
+        return false;
 
     get_pchar(u, hdr->signature, 4);
     hdr->free_space = get_uint32(u);
@@ -453,16 +445,16 @@ static int unmarshal_pmgl_header(unmarshaller* u, unsigned int blockLen, pgml_hd
     hdr->block_next = get_int32(u);
 
     if (!memeq(hdr->signature, _chm_pmgl_marker, 4)) {
-        return 0;
+        return false;
     }
     if (hdr->free_space > blockLen - CHM_PMGL_LEN) {
-        return 0;
+        return false;
     }
 
-    return 1;
+    return true;
 }
 
-static bool unmarshal_lzxc_reset_table(unmarshaller* u, struct chmLzxcResetTable* dest) {
+static bool unmarshal_lzxc_reset_table(unmarshaller* u, lzxc_reset_table* dest) {
     dest->version = get_uint32(u);
     dest->block_count = get_uint32(u);
     dest->unknown = get_uint32(u);
@@ -529,7 +521,8 @@ static bool unmarshal_lzxc_control_data(unmarshaller* u, chmLzxcControlData* des
     return true;
 }
 
-static bool parse_lzxc_control_data(chm_file* h, chm_entry *e, int64_t n, chmLzxcControlData* ctl_data) {
+static bool parse_lzxc_control_data(chm_file* h, chm_entry* e, int64_t n,
+                                    chmLzxcControlData* ctl_data) {
     uint8_t buf[256];
     if (n > (int64_t)sizeof(buf)) {
         return false;
@@ -639,35 +632,45 @@ static uint8_t* alloc_cached_block(chm_file* h, int64_t nBlock) {
     return h->cache_blocks[idx];
 }
 
-/* copy n bytes out of u into dst and zero-terminate dst */
-static bool copy_string(unmarshaller* u, int n, char* dst) {
-    uint8_t* d = eat_bytes(u, n);
-    if (d == NULL) {
-        return false;
-    }
-    memcpy(dst, d, n);
-    dst[n] = 0;
-    return true;
+static int flags_from_path(char* path) {
+    int flags = 0;
+    size_t n = strlen(path);
+
+    if (path[n - 1] == '/')
+        flags |= CHM_ENUMERATE_DIRS;
+    else
+        flags |= CHM_ENUMERATE_FILES;
+
+    if (n > 0 && path[0] == '/') {
+        if (n > 1 && (path[1] == '#' || path[1] == '$'))
+            flags |= CHM_ENUMERATE_SPECIAL;
+        else
+            flags |= CHM_ENUMERATE_NORMAL;
+    } else
+        flags |= CHM_ENUMERATE_META;
+    return flags;
 }
 
-static bool parse_pmgl_entry(unmarshaller* u, chm_unit_info* ui) {
-    int n = (int)get_cword(u);
-    if (n > CHM_MAX_PATHLEN || !u->ok) {
-        return false;
+static chm_entry* parse_pmgl_entry(unmarshaller* u) {
+    size_t pathLen = (size_t)get_cword(u);
+    if (pathLen > CHM_MAX_PATHLEN || !u->ok) {
+        return NULL;
     }
-
-    if (!copy_string(u, n, ui->path)) {
-        return false;
+    size_t n = sizeof(chm_entry) + pathLen + 1; /* +1 to nul-terminate */
+    chm_entry* e = (chm_entry*)calloc(1, n);
+    if (e == NULL) {
+        return NULL;
     }
-
-    ui->space = (int)get_cword(u);
-    ui->start = get_cword(u);
-    ui->length = get_cword(u);
-
+    e->path = (char*)e + sizeof(chm_entry);
+    get_pchar(u, e->path, (int)pathLen);
+    e->space = (int)get_cword(u);
+    e->start = get_cword(u);
+    e->length = get_cword(u);
     if (!u->ok) {
-        return false;
+        return NULL;
     }
-    return true;
+    e->flags = flags_from_path(e->path);
+    return e;
 }
 
 static bool get_int64_at_off(chm_file* h, int64_t off, int64_t* n_out) {
@@ -864,44 +867,8 @@ int64_t chm_retrieve_entry(chm_file* h, chm_entry* e, unsigned char* buf, int64_
     return total;
 }
 
-static int flags_from_path(char* path) {
-    int flags = 0;
-    size_t n = strlen(path);
-
-    if (path[n - 1] == '/')
-        flags |= CHM_ENUMERATE_DIRS;
-    else
-        flags |= CHM_ENUMERATE_FILES;
-
-    if (n > 0 && path[0] == '/') {
-        if (n > 1 && (path[1] == '#' || path[1] == '$'))
-            flags |= CHM_ENUMERATE_SPECIAL;
-        else
-            flags |= CHM_ENUMERATE_NORMAL;
-    } else
-        flags |= CHM_ENUMERATE_META;
-    return flags;
-}
-
-static chm_entry* entry_from_ui(chm_unit_info* ui) {
-    size_t pathLen = strlen(ui->path);
-    size_t n = sizeof(chm_entry) + pathLen + 1;
-    chm_entry* res = (chm_entry*)calloc(1, n);
-    if (res == NULL) {
-        return NULL;
-    }
-    res->start = ui->start;
-    res->length = ui->length;
-    res->space = ui->space;
-    res->flags = ui->flags;
-    res->path = (char*)res + sizeof(chm_entry);
-    memcpy(res->path, ui->path, pathLen + 1);
-    return res;
-}
-
 static bool parse_entries(chm_file* h) {
     pgml_hdr pgml;
-    chm_unit_info ui;
 
     int n_entries = 0;
     chm_entry* e;
@@ -911,11 +878,11 @@ static bool parse_entries(chm_file* h) {
         goto Error;
     }
 
-    int32_t curPage = h->itsp.index_head;
+    int32_t cur_page = h->itsp.index_head;
 
-    while (curPage != -1) {
+    while (cur_page != -1) {
         int64_t n = h->itsp.block_len;
-        if (read_bytes(h, buf, (int64_t)h->dir_offset + (int64_t)curPage * n, n) != n) {
+        if (read_bytes(h, buf, (int64_t)h->dir_offset + (int64_t)cur_page * n, n) != n) {
             goto Error;
         }
 
@@ -928,11 +895,7 @@ static bool parse_entries(chm_file* h) {
 
         /* decode all entries in this page */
         while (u.bytesLeft > 0) {
-            if (!parse_pmgl_entry(&u, &ui)) {
-                goto Error;
-            }
-            ui.flags = flags_from_path(ui.path);
-            e = entry_from_ui(&ui);
+            e = parse_pmgl_entry(&u);
             if (e == NULL) {
                 goto Error;
             }
@@ -940,7 +903,7 @@ static bool parse_entries(chm_file* h) {
             last_entry = e;
             n_entries++;
         }
-        curPage = pgml.block_next;
+        cur_page = pgml.block_next;
     }
     if (0 == n_entries) {
         goto Error;
@@ -971,22 +934,24 @@ Error:
     goto Exit;
 }
 
-static void parse_lzxc_reset_table(chm_file* h) {
+static bool parse_lzxc_reset_table(chm_file* h) {
     /* read reset table info */
     if (!h->compression_enabled) {
-        return;
+        return true;
     }
     int64_t n = CHM_LZXC_RESETTABLE_V1_LEN;
     uint8_t buf[CHM_LZXC_RESETTABLE_V1_LEN];
     if (chm_retrieve_entry(h, h->rt_unit, buf, 0, n) != n) {
         h->compression_enabled = false;
-        return;
+        return false;
     }
     unmarshaller u;
     unmarshaller_init(&u, buf, n);
     if (!unmarshal_lzxc_reset_table(&u, &h->reset_table)) {
         h->compression_enabled = false;
+        return false;
     }
+    return true;
 }
 
 bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
@@ -1027,8 +992,6 @@ bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
     h->dir_len = h->itsf.dir_len;
     h->dir_len -= h->itsp.header_len;
 
-    chm_set_cache_size(h, CHM_MAX_BLOCKS_CACHED);
-
     /* if the index root is -1, this means we don't have any PMGI blocks.
      * as a result, we must use the sole PMGL block as the index root
      */
@@ -1052,7 +1015,6 @@ bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
             uiLzxc = e;
         }
     }
-
     if (is_null_or_compressed(h->rt_unit) || is_null_or_compressed(h->cn_unit) ||
         is_null_or_compressed(uiLzxc)) {
         h->compression_enabled = false;
@@ -1073,6 +1035,7 @@ bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
             h->reset_blkcount = h->reset_interval / (h->window_size / 2) * ctlData.windowsPerReset;
         }
     }
+    chm_set_cache_size(h, CHM_MAX_BLOCKS_CACHED);
 
     return true;
 Error:

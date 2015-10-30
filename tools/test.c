@@ -116,6 +116,7 @@ static bool test_fd(const char* path) {
     chm_file f;
     bool ok = chm_parse(&f, fd_reader, &ctx);
     if (!ok) {
+        fprintf(stderr, "chm_parse() failed\n");
         fd_reader_close(&ctx);
         return false;
     }
