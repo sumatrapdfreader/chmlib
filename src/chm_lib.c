@@ -96,7 +96,7 @@ typedef struct pgml_hdr {
 /* structure of LZXC control data block */
 /*#define CHM_LZXC_MIN_LEN 0x18
 #define CHM_LZXC_V2_LEN 0x1c*/
-typedef struct chmLzxcControlData {
+typedef struct lzxc_control_data {
     uint32_t size;            /*  0        */
     char signature[4];        /*  4 (LZXC) */
     uint32_t version;         /*  8        */
@@ -104,7 +104,7 @@ typedef struct chmLzxcControlData {
     uint32_t windowSize;      /* 10        */
     uint32_t windowsPerReset; /* 14        */
     uint32_t unknown_18;      /* 18        */
-} chmLzxcControlData;
+} lzxc_control_data;
 
 void mem_reader_init(mem_reader_ctx* ctx, void* data, int64_t size) {
     ctx->data = data;
@@ -481,7 +481,7 @@ static bool unmarshal_lzxc_reset_table(unmarshaller* u, lzxc_reset_table* dest) 
     return true;
 }
 
-static bool unmarshal_lzxc_control_data(unmarshaller* u, chmLzxcControlData* dest) {
+static bool unmarshal_lzxc_control_data(unmarshaller* u, lzxc_control_data* dest) {
     dest->size = get_uint32(u);
     get_pchar(u, dest->signature, 4);
     dest->version = get_uint32(u);
@@ -522,7 +522,7 @@ static bool unmarshal_lzxc_control_data(unmarshaller* u, chmLzxcControlData* des
 }
 
 static bool parse_lzxc_control_data(chm_file* h, chm_entry* e, int64_t n,
-                                    chmLzxcControlData* ctl_data) {
+                                    lzxc_control_data* ctl_data) {
     uint8_t buf[256];
     if (n > (int64_t)sizeof(buf)) {
         return false;
@@ -957,8 +957,7 @@ static bool parse_lzxc_reset_table(chm_file* h) {
 bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
     unsigned char buf[256];
     unsigned int n;
-    chm_entry* uiLzxc = NULL;
-    chmLzxcControlData ctlData;
+    chm_entry* lzxc = NULL;
     unmarshaller u;
 
     memzero(h, sizeof(chm_file));
@@ -1012,27 +1011,27 @@ bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
         } else if (streq(e->path, CHMU_CONTENT)) {
             h->cn_unit = e;
         } else if (streq(e->path, CHMU_LZXC_CONTROLDATA)) {
-            uiLzxc = e;
+            lzxc = e;
         }
     }
     if (is_null_or_compressed(h->rt_unit) || is_null_or_compressed(h->cn_unit) ||
-        is_null_or_compressed(uiLzxc)) {
+        is_null_or_compressed(lzxc)) {
         h->compression_enabled = false;
     }
 
     parse_lzxc_reset_table(h);
 
-    /* read control data */
     if (h->compression_enabled) {
-        int64_t n2 = (int64_t)uiLzxc->length;
+        int64_t n2 = (int64_t)lzxc->length;
+        lzxc_control_data ctl_data;
 
-        if (!parse_lzxc_control_data(h, uiLzxc, n2, &ctlData)) {
+        if (!parse_lzxc_control_data(h, lzxc, n2, &ctl_data)) {
             h->compression_enabled = false;
         } else {
             /* prevent division by zero */
-            h->window_size = ctlData.windowSize;
-            h->reset_interval = ctlData.resetInterval;
-            h->reset_blkcount = h->reset_interval / (h->window_size / 2) * ctlData.windowsPerReset;
+            h->window_size = ctl_data.windowSize;
+            h->reset_interval = ctl_data.resetInterval;
+            h->reset_blkcount = h->reset_interval / (h->window_size / 2) * ctl_data.windowsPerReset;
         }
     }
     chm_set_cache_size(h, CHM_MAX_BLOCKS_CACHED);
