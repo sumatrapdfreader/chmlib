@@ -50,6 +50,9 @@ var (
 	flgCheckRef      bool
 	priorityFiles    = []string{
 		"/Volumes/Store/books/_chm/Automating UNIX And Linux Administration (2003).chm",
+		"/Volumes/Store/books/_chm/Que.Mobile.Guide.to.BlackBerry.May.2005.eBook-LiB.ch",
+		"/Volumes/Store/books/_chm/Linux Unwired (2004).chm",
+		"/Volumes/Store/tmp/HD1TB/books/chm/XML A Manager's Guide 2nd Edition.chm",
 	}
 )
 
@@ -64,29 +67,10 @@ different results for '7575a94fb9bebd9eab9f1c038f22e12917d94c84' on line 351, fi
 expected: '1,1874347,1093,file,0000000000000000000000000000000000000000,/0789733439/images/0789733439/graphics/browser.gif;400479'
 got     : '1,1874347,1093,file,464320F04EB262006A3B1EB74D1A2F897ECA9986,/0789733439/images/0789733439/graphics/browser.gif;400479'
 
-different results for 'c843a11d41e37aba228eb34e1f5821ffde14d45a', '/Volumes/Store/books/_chm/Automating UNIX And Linux Administration (2003).chm'
-len(lines) = 187, len(expectedLines) = 188
-got: ''
-exp: '*** ERROR ***'
-
-different results for 'ec52bf6754c7c919633a3d21cf784c9b66786417', '/Volumes/Store/books/_chm/Linux Unwired (2004).chm'
-len(lines) = 237, len(expectedLines) = 238
-got: ''
-exp: '*** ERROR ***'
-
-different results for '626c417536cce7d17fe6dda94ab58db2cc129d23', '/Volumes/Store/tmp/HD1TB/books/chm/XML A Manager's Guide 2nd Edition.chm'
-len(lines) = 144, len(expectedLines) = 145
-got: ''
-exp: '*** ERROR ***'
-
-
 */
 var (
 	whiteListed = []string{
 		"7575a94fb9bebd9eab9f1c038f22e12917d94c84",
-		"c843a11d41e37aba228eb34e1f5821ffde14d45a",
-		"ec52bf6754c7c919633a3d21cf784c9b66786417",
-		"626c417536cce7d17fe6dda94ab58db2cc129d23",
 	}
 )
 
