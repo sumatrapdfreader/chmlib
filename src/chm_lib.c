@@ -102,9 +102,9 @@ typedef struct pgml_hdr {
 #define CHM_LZXC_RESETTABLE_V1_LEN 0x28
 
 /* structure of LZXC control data block */
-#define CHM_LZXC_MIN_LEN 0x18
-#define CHM_LZXC_V2_LEN 0x1c
-struct chmLzxcControlData {
+/*#define CHM_LZXC_MIN_LEN 0x18
+#define CHM_LZXC_V2_LEN 0x1c*/
+typedef struct chmLzxcControlData {
     uint32_t size;            /*  0        */
     char signature[4];        /*  4 (LZXC) */
     uint32_t version;         /*  8        */
@@ -112,7 +112,7 @@ struct chmLzxcControlData {
     uint32_t windowSize;      /* 10        */
     uint32_t windowsPerReset; /* 14        */
     uint32_t unknown_18;      /* 18        */
-};
+} chmLzxcControlData;
 
 void mem_reader_init(mem_reader_ctx* ctx, void* data, int64_t size) {
     ctx->data = data;
@@ -250,6 +250,10 @@ static void hexprint(uint8_t* d, int n) {
 }
 #endif
 
+static void memzero(void* d, size_t len) {
+    memset(d, 0, len);
+}
+
 static int memeq(const void* d1, const void* d2, size_t n) {
     return memcmp(d1, d2, n) == 0;
 }
@@ -348,26 +352,6 @@ static int64_t get_cword(unmarshaller* u) {
             return res + b;
         }
     }
-}
-
-/* utilities for unmarshalling data */
-static int _unmarshal_char_array(unsigned char** pData, unsigned int* pLenRemain, char* dest,
-                                 int count) {
-    if (count <= 0 || (unsigned int)count > *pLenRemain)
-        return 0;
-    memcpy(dest, (*pData), count);
-    *pData += count;
-    *pLenRemain -= count;
-    return 1;
-}
-
-static int _unmarshal_uint32(unsigned char** pData, unsigned int* pLenRemain, uint32_t* dest) {
-    if (4 > *pLenRemain)
-        return 0;
-    *dest = (*pData)[0] | (*pData)[1] << 8 | (*pData)[2] << 16 | (*pData)[3] << 24;
-    *pData += 4;
-    *pLenRemain -= 4;
-    return 1;
 }
 
 static bool unmarshal_itsf_header(unmarshaller* u, itsf_hdr* hdr) {
@@ -505,44 +489,57 @@ static bool unmarshal_lzxc_reset_table(unmarshaller* u, struct chmLzxcResetTable
     return true;
 }
 
-static int _unmarshal_lzxc_control_data(unsigned char** pData, unsigned int* pDataLen,
-                                        struct chmLzxcControlData* dest) {
-    if (*pDataLen < CHM_LZXC_MIN_LEN)
-        return 0;
+static bool unmarshal_lzxc_control_data(unmarshaller* u, chmLzxcControlData* dest) {
+    dest->size = get_uint32(u);
+    get_pchar(u, dest->signature, 4);
+    dest->version = get_uint32(u);
+    dest->resetInterval = get_uint32(u);
+    dest->windowSize = get_uint32(u);
+    dest->windowsPerReset = get_uint32(u);
 
-    _unmarshal_uint32(pData, pDataLen, &dest->size);
-    _unmarshal_char_array(pData, pDataLen, dest->signature, 4);
-    _unmarshal_uint32(pData, pDataLen, &dest->version);
-    _unmarshal_uint32(pData, pDataLen, &dest->resetInterval);
-    _unmarshal_uint32(pData, pDataLen, &dest->windowSize);
-    _unmarshal_uint32(pData, pDataLen, &dest->windowsPerReset);
-
-    if (*pDataLen >= CHM_LZXC_V2_LEN)
-        _unmarshal_uint32(pData, pDataLen, &dest->unknown_18);
-    else
-        dest->unknown_18 = 0;
+    dest->unknown_18 = 0;
+    if (u->ok && u->bytesLeft >= 4) {
+        dest->unknown_18 = get_uint32(u);
+    }
+    if (!u->ok) {
+        return false;
+    }
 
     if (dest->version == 2) {
         dest->resetInterval *= 0x8000;
         dest->windowSize *= 0x8000;
     }
-    if (dest->windowSize == 0 || dest->resetInterval == 0)
-        return 0;
+    if (dest->windowSize == 0 || dest->resetInterval == 0) {
+        return false;
+    }
 
     /* for now, only support resetInterval a multiple of windowSize/2 */
-    if (dest->windowSize == 1)
-        return 0;
-    if ((dest->resetInterval % (dest->windowSize / 2)) != 0)
-        return 0;
+    if (dest->windowSize == 1) {
+        return false;
+    }
 
-    if (!memeq(dest->signature, "LZXC", 4))
-        return 0;
+    if ((dest->resetInterval % (dest->windowSize / 2)) != 0) {
+        return false;
+    }
 
-    return 1;
+    if (!memeq(dest->signature, "LZXC", 4)) {
+        return false;
+    }
+
+    return true;
 }
 
-static void memzero(void* d, size_t len) {
-    memset(d, 0, len);
+static bool parse_lzxc_control_data(chm_file* h, chm_entry *e, int64_t n, chmLzxcControlData* ctl_data) {
+    uint8_t buf[256];
+    if (n > (int64_t)sizeof(buf)) {
+        return false;
+    }
+    if (chm_retrieve_entry(h, e, buf, 0, n) != n) {
+        return false;
+    }
+    unmarshaller u;
+    unmarshaller_init(&u, buf, n);
+    return unmarshal_lzxc_control_data(&u, ctl_data);
 }
 
 static int64_t read_bytes(chm_file* h, uint8_t* buf, int64_t off, int64_t len) {
@@ -995,9 +992,8 @@ static void parse_lzxc_reset_table(chm_file* h) {
 bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
     unsigned char buf[256];
     unsigned int n;
-    unsigned char* tmp;
     chm_entry* uiLzxc = NULL;
-    struct chmLzxcControlData ctlData;
+    chmLzxcControlData ctlData;
     unmarshaller u;
 
     memzero(h, sizeof(chm_file));
@@ -1066,20 +1062,14 @@ bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
 
     /* read control data */
     if (h->compression_enabled) {
-        n = (unsigned int)uiLzxc->length;
-        if (uiLzxc->length > (int64_t)sizeof(buf)) {
-            goto Error;
-        }
+        int64_t n2 = (int64_t)uiLzxc->length;
 
-        tmp = buf;
-        if (chm_retrieve_entry(h, uiLzxc, buf, 0, n) != n ||
-            !_unmarshal_lzxc_control_data(&tmp, &n, &ctlData)) {
+        if (!parse_lzxc_control_data(h, uiLzxc, n2, &ctlData)) {
             h->compression_enabled = false;
         } else {
             /* prevent division by zero */
             h->window_size = ctlData.windowSize;
             h->reset_interval = ctlData.resetInterval;
-
             h->reset_blkcount = h->reset_interval / (h->window_size / 2) * ctlData.windowsPerReset;
         }
     }
