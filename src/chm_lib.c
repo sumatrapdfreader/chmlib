@@ -141,7 +141,7 @@ struct chmLzxcResetTable {
     int64_t uncompressed_len;
     int64_t compressed_len;
     int64_t block_len;
-}; /* __attribute__ ((aligned (1))); */
+};
 
 /* structure of LZXC control data block */
 #define CHM_LZXC_MIN_LEN 0x18
@@ -158,23 +158,23 @@ struct chmLzxcControlData {
 
 #define MAX_CACHE_BLOCKS 128
 
-void mem_reader_init(mem_reader_ctx *ctx, void *data, int64_t size) {
-  ctx->data = data;
-  ctx->size = size;
+void mem_reader_init(mem_reader_ctx* ctx, void* data, int64_t size) {
+    ctx->data = data;
+    ctx->size = size;
 }
 
-int64_t mem_reader(mem_reader_ctx *ctx, void *buf, int64_t off, int64_t len) {
-  int64_t toReadMax = ctx->size - off;
-  if (toReadMax <= 0) {
-    return -1;
-  }
-  if (len > toReadMax) {
-    len = toReadMax;
-  }
-  char *d = (char*)ctx->data;
-  d += off;
-  memcpy(buf, d, len);
-  return len;
+int64_t mem_reader(mem_reader_ctx* ctx, void* buf, int64_t off, int64_t len) {
+    int64_t toReadMax = ctx->size - off;
+    if (toReadMax <= 0) {
+        return -1;
+    }
+    if (len > toReadMax) {
+        len = toReadMax;
+    }
+    char* d = (char*)ctx->data;
+    d += off;
+    memcpy(buf, d, len);
+    return len;
 }
 
 /* the structure used for chm file handles */
@@ -221,7 +221,7 @@ static const char _chm_pmgi_marker[4] = "PMGI";
 struct chmPmgiHeader {
     char signature[4];   /*  0 (PMGI) */
     uint32_t free_space; /*  4 */
-};                       /* __attribute__ ((aligned (1))); */
+};
 
 #if defined(WIN32)
 /* TODO: http://download.redis.io/redis-stable/deps/jemalloc/include/msvc_compat/strings.h
@@ -243,18 +243,18 @@ static int ffs(unsigned int val) {
 static dbgprintfunc g_dbg_print = NULL;
 
 void chm_set_dbgprint(dbgprintfunc f) {
-  g_dbg_print = f;
+    g_dbg_print = f;
 }
 
 static void dbgprintf(const char* fmt, ...) {
     if (g_dbg_print == NULL) {
-      return;
+        return;
     }
-    char buf[4096] = { 0 };
+    char buf[4096] = {0};
     va_list args;
     va_start(args, fmt);
     /* TODO: vsnprintf_s if MSVC */
-    vsnprintf(buf, sizeof(buf)-1, fmt, args);
+    vsnprintf(buf, sizeof(buf) - 1, fmt, args);
     g_dbg_print(buf);
 }
 
