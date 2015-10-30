@@ -201,7 +201,6 @@ typedef struct chm_file {
     int has_parse_result;
 } chm_file;
 
-/* close an ITS archive */
 void chm_close(struct chm_file* h);
 
 void chm_set_cache_size(struct chm_file* h, int nCacheBlocks);
@@ -215,18 +214,11 @@ int chm_resolve_object(struct chm_file* h, const char* objPath, chm_unit_info* u
 int64_t chm_retrieve_object(struct chm_file* h, chm_unit_info* ui, unsigned char* buf, int64_t addr,
                             int64_t len);
 
-/* enumerate the objects in the .chm archive */
-typedef int (*CHM_ENUMERATOR)(struct chm_file* h, chm_unit_info* ui, void* context);
 #define CHM_ENUMERATE_NORMAL 1
 #define CHM_ENUMERATE_META 2
 #define CHM_ENUMERATE_SPECIAL 4
 #define CHM_ENUMERATE_FILES 8
 #define CHM_ENUMERATE_DIRS 16
-#define CHM_ENUMERATE_ALL 31
-#define CHM_ENUMERATOR_FAILURE 0
-#define CHM_ENUMERATOR_CONTINUE 1
-#define CHM_ENUMERATOR_SUCCESS 2
-int chm_enumerate(struct chm_file* h, int what, CHM_ENUMERATOR e, void* context);
 
 /* new API */
 
