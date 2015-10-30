@@ -522,7 +522,6 @@ static int _unmarshal_lzxc_reset_table(unsigned char** pData, unsigned int* pDat
     if (*pDataLen != CHM_LZXC_RESETTABLE_V1_LEN)
         return 0;
 
-    /* unmarshal fields */
     _unmarshal_uint32(pData, pDataLen, &dest->version);
     _unmarshal_uint32(pData, pDataLen, &dest->block_count);
     _unmarshal_uint32(pData, pDataLen, &dest->unknown);
@@ -531,7 +530,6 @@ static int _unmarshal_lzxc_reset_table(unsigned char** pData, unsigned int* pDat
     _unmarshal_uint64(pData, pDataLen, &dest->compressed_len);
     _unmarshal_uint64(pData, pDataLen, &dest->block_len);
 
-    /* check structure */
     if (dest->version != 2)
         return 0;
     /* SumatraPDF: sanity check (huge values are usually due to broken files) */
@@ -545,11 +543,9 @@ static int _unmarshal_lzxc_reset_table(unsigned char** pData, unsigned int* pDat
 
 static int _unmarshal_lzxc_control_data(unsigned char** pData, unsigned int* pDataLen,
                                         struct chmLzxcControlData* dest) {
-    /* we want at least 0x18 bytes */
     if (*pDataLen < CHM_LZXC_MIN_LEN)
         return 0;
 
-    /* unmarshal fields */
     _unmarshal_uint32(pData, pDataLen, &dest->size);
     _unmarshal_char_array(pData, pDataLen, dest->signature, 4);
     _unmarshal_uint32(pData, pDataLen, &dest->version);
@@ -683,9 +679,8 @@ int chm_init(chm_file* h, chm_reader read_func, void* read_ctx) {
         if (chm_retrieve_entry(h, uiLzxc, buf, 0, n) != n ||
             !_unmarshal_lzxc_control_data(&tmp, &n, &ctlData)) {
             h->compression_enabled = 0;
-        } else
-        {
-           /* SumatraPDF: prevent division by zero */
+        } else {
+            /* SumatraPDF: prevent division by zero */
             h->window_size = ctlData.windowSize;
             h->reset_interval = ctlData.resetInterval;
 
@@ -829,30 +824,27 @@ static int _chm_get_cmpblock_bounds(chm_file* h, int64_t block, int64_t* start, 
         /* unpack the start address */
         dummy = buffer;
         remain = 8;
-        if (read_bytes(h, buffer, (int64_t)h->itsf.data_offset + (int64_t)h->rt_unit->start +
-                                      (int64_t)h->reset_table.table_offset + (int64_t)block * 8,
-                       remain) != remain ||
+        int64_t off = (int64_t)h->itsf.data_offset + (int64_t)h->rt_unit->start +
+                      (int64_t)h->reset_table.table_offset + (int64_t)block * 8;
+        if (read_bytes(h, buffer, off, remain) != remain ||
             !_unmarshal_uint64(&dummy, &remain, start))
             return 0;
 
         /* unpack the end address */
         dummy = buffer;
         remain = 8;
-        if (read_bytes(h, buffer, (int64_t)h->itsf.data_offset + (int64_t)h->rt_unit->start +
-                                      (int64_t)h->reset_table.table_offset + (int64_t)block * 8 + 8,
-                       remain) != remain ||
-            !_unmarshal_int64(&dummy, &remain, len))
+        off = (int64_t)h->itsf.data_offset + (int64_t)h->rt_unit->start +
+              (int64_t)h->reset_table.table_offset + (int64_t)block * 8 + 8;
+        if (read_bytes(h, buffer, off, remain) != remain || !_unmarshal_int64(&dummy, &remain, len))
             return 0;
-    }
-
-    /* for the last block, use the span in addition to the reset table */
-    else {
+    } else {
+        /* for the last block, use the span in addition to the reset table */
         /* unpack the start address */
         dummy = buffer;
         remain = 8;
-        if (read_bytes(h, buffer, (int64_t)h->itsf.data_offset + (int64_t)h->rt_unit->start +
-                                      (int64_t)h->reset_table.table_offset + (int64_t)block * 8,
-                       remain) != remain ||
+        int64_t off = (int64_t)h->itsf.data_offset + (int64_t)h->rt_unit->start +
+                      (int64_t)h->reset_table.table_offset + (int64_t)block * 8;
+        if (read_bytes(h, buffer, off, remain) != remain ||
             !_unmarshal_uint64(&dummy, &remain, start))
             return 0;
 
