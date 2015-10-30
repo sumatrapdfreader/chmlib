@@ -510,7 +510,7 @@ static int _unmarshal_lzxc_reset_table(unsigned char** pData, unsigned int* pDat
 
     if (dest->version != 2)
         return 0;
-    /* SumatraPDF: sanity check (huge values are usually due to broken files) */
+    /* sanity check (huge values are usually due to broken files) */
     if (dest->uncompressed_len > UINT_MAX || dest->compressed_len > UINT_MAX)
         return 0;
     if (dest->block_len == 0 || dest->block_len > UINT_MAX)
@@ -569,110 +569,6 @@ static bool is_null_or_compressed(chm_entry* e) {
     return (e == NULL) || (e->space == CHM_COMPRESSED);
 }
 
-bool chm_init(chm_file* h, chm_reader read_func, void* read_ctx) {
-    unsigned char buf[256];
-    unsigned int n;
-    unsigned char* tmp;
-    chm_entry* uiLzxc = NULL;
-    struct chmLzxcControlData ctlData;
-    unmarshaller u;
-
-    memzero(h, sizeof(chm_file));
-    h->read_func = read_func;
-    h->read_ctx = read_ctx;
-
-    /* read and verify header */
-    n = CHM_ITSF_V3_LEN;
-    if (read_bytes(h, buf, 0, n) != n) {
-        goto Error;
-    }
-
-    unmarshaller_init(&u, (uint8_t*)buf, n);
-    if (!unmarshal_itsf_header(&u, &h->itsf)) {
-        dbgprintf("unmarshal_itsf_header() failed\n");
-        goto Error;
-    }
-
-    n = CHM_ITSP_V1_LEN;
-    if (read_func(read_ctx, buf, (int64_t)h->itsf.dir_offset, n) != n) {
-        goto Error;
-    }
-    unmarshaller_init(&u, (uint8_t*)buf, n);
-    if (!unmarshal_itsp_header(&u, &h->itsp)) {
-        goto Error;
-    }
-
-    h->dir_offset = h->itsf.dir_offset;
-    h->dir_offset += h->itsp.header_len;
-
-    h->dir_len = h->itsf.dir_len;
-    h->dir_len -= h->itsp.header_len;
-
-    /* if the index root is -1, this means we don't have any PMGI blocks.
-     * as a result, we must use the sole PMGL block as the index root
-     */
-    if (h->itsp.index_root <= -1)
-        h->itsp.index_root = h->itsp.index_head;
-
-    /* By default, compression is enabled. */
-    h->compression_enabled = 1;
-
-    chm_parse(h);
-
-    /* prefetch most commonly needed unit infos */
-    for (int i = 0; i < h->parse_result.n_entries; i++) {
-        chm_entry* e = h->parse_result.entries[i];
-        if (streq(e->path, CHMU_RESET_TABLE)) {
-            h->rt_unit = e;
-        } else if (streq(e->path, CHMU_CONTENT)) {
-            h->cn_unit = e;
-        } else if (streq(e->path, CHMU_LZXC_CONTROLDATA)) {
-            uiLzxc = e;
-        }
-    }
-
-    if (is_null_or_compressed(h->rt_unit) || is_null_or_compressed(h->cn_unit) ||
-        is_null_or_compressed(uiLzxc)) {
-        h->compression_enabled = 0;
-    }
-
-    /* read reset table info */
-    if (h->compression_enabled) {
-        n = CHM_LZXC_RESETTABLE_V1_LEN;
-        tmp = buf;
-        if (chm_retrieve_entry(h, h->rt_unit, buf, 0, n) != n ||
-            !_unmarshal_lzxc_reset_table(&tmp, &n, &h->reset_table)) {
-            h->compression_enabled = 0;
-        }
-    }
-
-    /* read control data */
-    if (h->compression_enabled) {
-        n = (unsigned int)uiLzxc->length;
-        if (uiLzxc->length > (int64_t)sizeof(buf)) {
-            goto Error;
-        }
-
-        tmp = buf;
-        if (chm_retrieve_entry(h, uiLzxc, buf, 0, n) != n ||
-            !_unmarshal_lzxc_control_data(&tmp, &n, &ctlData)) {
-            h->compression_enabled = 0;
-        } else {
-            /* SumatraPDF: prevent division by zero */
-            h->window_size = ctlData.windowSize;
-            h->reset_interval = ctlData.resetInterval;
-
-            h->reset_blkcount = h->reset_interval / (h->window_size / 2) * ctlData.windowsPerReset;
-        }
-    }
-
-    chm_set_cache_size(h, CHM_MAX_BLOCKS_CACHED);
-    return true;
-Error:
-    chm_close(h);
-    return false;
-}
-
 static void free_entries(chm_entry* first) {
     chm_entry* next;
     chm_entry* e = first;
@@ -695,11 +591,11 @@ void chm_close(chm_file* h) {
     for (int i = 0; i < h->cache_num_blocks; i++) {
         free(h->cache_blocks[i]);
     }
-    if (h->parse_result.entries != NULL) {
-        if (h->parse_result.n_entries > 0) {
-            free_entries(h->parse_result.entries[0]);
+    if (h->entries != NULL) {
+        if (h->n_entries > 0) {
+            free_entries(h->entries[0]);
         }
-        free(h->parse_result.entries);
+        free(h->entries);
     }
 }
 
@@ -940,7 +836,6 @@ static int64_t _chm_decompress_region(chm_file* h, uint8_t* buf, int64_t start, 
     }
 
     int64_t gotLen = _chm_decompress_block(h, nBlock, &ubuffer);
-    /* SumatraPDF: check return value */
     if (gotLen == (int64_t)-1) {
         return 0;
     }
@@ -1029,16 +924,11 @@ static chm_entry* entry_from_ui(chm_unit_info* ui) {
     return res;
 }
 
-chm_parse_result* chm_parse(chm_file* h) {
+static bool parse_entries(chm_file* h) {
     pgml_hdr pgml;
     chm_unit_info ui;
-    int err = 0;
 
-    if (h->has_parse_result) {
-        return &h->parse_result;
-    }
-
-    int nEntries = 0;
+    int n_entries = 0;
     chm_entry* e;
     chm_entry* last_entry = NULL;
     uint8_t* buf = malloc((size_t)h->itsp.block_len);
@@ -1073,21 +963,22 @@ chm_parse_result* chm_parse(chm_file* h) {
             }
             e->next = last_entry;
             last_entry = e;
-            nEntries++;
+            n_entries++;
         }
         curPage = pgml.block_next;
     }
-    if (0 == nEntries) {
+    if (0 == n_entries) {
         goto Error;
     }
+
 Exit:
-    if (nEntries > 0) {
-        h->parse_result.n_entries = nEntries;
-        chm_entry** entries = (chm_entry**)calloc(nEntries, sizeof(chm_entry*));
+    if (n_entries > 0) {
+        h->n_entries = n_entries;
+        chm_entry** entries = (chm_entry**)calloc(n_entries, sizeof(chm_entry*));
         if (entries != NULL) {
-            h->parse_result.entries = entries;
+            h->entries = entries;
             e = last_entry;
-            int n = nEntries - 1;
+            int n = n_entries - 1;
             while (e != NULL) {
                 entries[n] = e;
                 --n;
@@ -1096,10 +987,117 @@ Exit:
         }
     }
     free(buf);
-    h->has_parse_result = 1;
-    return &h->parse_result;
+    if (h->parse_entries_failed || n_entries == 0) {
+      return false;
+    }
+    return true;
 Error:
-
-    err = 1;
+    h->parse_entries_failed = true;
     goto Exit;
+}
+
+
+bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
+    unsigned char buf[256];
+    unsigned int n;
+    unsigned char* tmp;
+    chm_entry* uiLzxc = NULL;
+    struct chmLzxcControlData ctlData;
+    unmarshaller u;
+
+    memzero(h, sizeof(chm_file));
+    h->read_func = read_func;
+    h->read_ctx = read_ctx;
+
+    /* read and verify header */
+    n = CHM_ITSF_V3_LEN;
+    if (read_bytes(h, buf, 0, n) != n) {
+        goto Error;
+    }
+
+    unmarshaller_init(&u, (uint8_t*)buf, n);
+    if (!unmarshal_itsf_header(&u, &h->itsf)) {
+        dbgprintf("unmarshal_itsf_header() failed\n");
+        goto Error;
+    }
+
+    n = CHM_ITSP_V1_LEN;
+    if (read_func(read_ctx, buf, (int64_t)h->itsf.dir_offset, n) != n) {
+        goto Error;
+    }
+    unmarshaller_init(&u, (uint8_t*)buf, n);
+    if (!unmarshal_itsp_header(&u, &h->itsp)) {
+        goto Error;
+    }
+
+    h->dir_offset = h->itsf.dir_offset;
+    h->dir_offset += h->itsp.header_len;
+
+    h->dir_len = h->itsf.dir_len;
+    h->dir_len -= h->itsp.header_len;
+
+    /* if the index root is -1, this means we don't have any PMGI blocks.
+     * as a result, we must use the sole PMGL block as the index root
+     */
+    if (h->itsp.index_root <= -1)
+        h->itsp.index_root = h->itsp.index_head;
+
+    h->compression_enabled = 1;
+
+    parse_entries(h);
+    if (h->n_entries == 0) {
+      goto Error;
+    }
+
+    for (int i = 0; i < h->n_entries; i++) {
+        chm_entry* e = h->entries[i];
+        if (streq(e->path, CHMU_RESET_TABLE)) {
+            h->rt_unit = e;
+        } else if (streq(e->path, CHMU_CONTENT)) {
+            h->cn_unit = e;
+        } else if (streq(e->path, CHMU_LZXC_CONTROLDATA)) {
+            uiLzxc = e;
+        }
+    }
+
+    if (is_null_or_compressed(h->rt_unit) || is_null_or_compressed(h->cn_unit) ||
+        is_null_or_compressed(uiLzxc)) {
+        h->compression_enabled = 0;
+    }
+
+    /* read reset table info */
+    if (h->compression_enabled) {
+        n = CHM_LZXC_RESETTABLE_V1_LEN;
+        tmp = buf;
+        if (chm_retrieve_entry(h, h->rt_unit, buf, 0, n) != n ||
+            !_unmarshal_lzxc_reset_table(&tmp, &n, &h->reset_table)) {
+            h->compression_enabled = 0;
+        }
+    }
+
+    /* read control data */
+    if (h->compression_enabled) {
+        n = (unsigned int)uiLzxc->length;
+        if (uiLzxc->length > (int64_t)sizeof(buf)) {
+            goto Error;
+        }
+
+        tmp = buf;
+        if (chm_retrieve_entry(h, uiLzxc, buf, 0, n) != n ||
+            !_unmarshal_lzxc_control_data(&tmp, &n, &ctlData)) {
+            h->compression_enabled = 0;
+        } else {
+            /* prevent division by zero */
+            h->window_size = ctlData.windowSize;
+            h->reset_interval = ctlData.resetInterval;
+
+            h->reset_blkcount = h->reset_interval / (h->window_size / 2) * ctlData.windowsPerReset;
+        }
+    }
+
+    chm_set_cache_size(h, CHM_MAX_BLOCKS_CACHED);
+    return true;
+Error:
+    chm_close(h);
+    return false;
 }

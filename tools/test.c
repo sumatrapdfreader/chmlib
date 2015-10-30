@@ -94,14 +94,15 @@ static bool process_entry(struct chm_file* h, chm_entry* e) {
     return true;
 }
 
-/* returns 0 if ok, != 0 on error */
 static bool test_chm(chm_file* h) {
-    chm_parse_result* res = chm_parse(h);
-    for (int i = 0; i < res->n_entries; i++) {
-        if (!process_entry(h, res->entries[i])) {
+    for (int i = 0; i < h->n_entries; i++) {
+        if (!process_entry(h, h->entries[i])) {
             printf("   *** ERROR ***\n");
             return false;
         }
+    }
+    if (h->parse_entries_failed) {
+      printf("   *** ERROR ***\n");
     }
     return true;
 }
@@ -113,7 +114,7 @@ static bool test_fd(const char* path) {
         return false;
     }
     chm_file f;
-    bool ok = chm_init(&f, fd_reader, &ctx);
+    bool ok = chm_parse(&f, fd_reader, &ctx);
     if (!ok) {
         fd_reader_close(&ctx);
         return false;

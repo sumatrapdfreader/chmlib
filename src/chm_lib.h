@@ -152,12 +152,6 @@ typedef struct chm_entry {
     int flags;
 } chm_entry;
 
-typedef struct chm_parse_result {
-    chm_entry** entries;
-    int n_entries;
-    int err; /* 0 means no error */
-} chm_parse_result;
-
 #define MAX_CACHE_BLOCKS 128
 
 /* the structure used for chm file handles */
@@ -192,24 +186,21 @@ typedef struct chm_file {
     int64_t cache_block_indices[MAX_CACHE_BLOCKS];
     int cache_num_blocks;
 
-    chm_parse_result parse_result;
-    int has_parse_result;
+    chm_entry** entries;
+    int n_entries;
+    /* might be a partial failure i.e. might still have entries */
+    bool parse_entries_failed;
 } chm_file;
 
 void chm_close(struct chm_file* h);
 
 void chm_set_cache_size(struct chm_file* h, int nCacheBlocks);
 
-bool chm_init(struct chm_file* f, chm_reader read_func, void* read_ctx);
+bool chm_parse(struct chm_file* f, chm_reader read_func, void* read_ctx);
 
 /* allow intercepting debug messages from the code */
 typedef void (*dbgprintfunc)(const char* s);
 void chm_set_dbgprint(dbgprintfunc f);
-
-/* result is valid until chm_close().
-It's possible to have an error and partial results.
-*/
-chm_parse_result* chm_parse(struct chm_file* h);
 
 /* retrieve part of an entry from the archive */
 int64_t chm_retrieve_entry(struct chm_file* h, chm_entry* e, unsigned char* buf, int64_t addr,
