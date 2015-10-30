@@ -15,26 +15,7 @@
 
 #include "sha1.h"
 
-#define UNUSED(x) (void) x
-
-static uint8_t* extract_file(struct chm_file* h, chm_unit_info* ui) {
-    int64_t len = (int64_t)ui->length;
-
-    uint8_t* buf = (uint8_t*)malloc((size_t)len + 1);
-    if (buf == NULL) {
-        return NULL;
-    }
-    buf[len] = 0; /* null-terminate just in case */
-
-    int64_t n = chm_retrieve_object(h, ui, buf, 0, len);
-    if (n != len) {
-        free(buf);
-        return NULL;
-    }
-    return buf;
-}
-
-static uint8_t* extract_entry2(struct chm_file* h, chm_entry* e) {
+static uint8_t* extract_entry(struct chm_file* h, chm_entry* e) {
     int64_t len = (int64_t)e->length;
 
     uint8_t* buf = (uint8_t*)malloc((size_t)len + 1);
@@ -49,12 +30,6 @@ static uint8_t* extract_entry2(struct chm_file* h, chm_entry* e) {
         return NULL;
     }
     return buf;
-}
-
-/* return 1 if path ends with '/' */
-static int is_dir(const char* path) {
-    size_t n = strlen(path) - 1;
-    return path[n] == '/';
 }
 
 /* return 1 if s contains ',' */
@@ -80,71 +55,6 @@ static void sha1_to_hex(uint8_t* sha1, char* sha1Hex) {
     }
 }
 
-static int enum_cb(struct chm_file* h, chm_unit_info* ui, void* ctx) {
-    UNUSED(ctx);
-    char buf[128] = {0};
-    uint8_t sha1[20] = {0};
-    char sha1Hex[41] = {0};
-
-    int isFile = ui->flags & CHM_ENUMERATE_FILES;
-
-    if (ui->flags & CHM_ENUMERATE_SPECIAL)
-        strcpy(buf, "special_");
-    else if (ui->flags & CHM_ENUMERATE_META)
-        strcpy(buf, "meta_");
-
-    if (ui->flags & CHM_ENUMERATE_DIRS)
-        strcat(buf, "dir");
-    else if (isFile)
-        strcat(buf, "file");
-
-    if (ui->length > 0) {
-        uint8_t* d = extract_file(h, ui);
-        if (d != NULL) {
-            int err = sha1_process_all(d, (unsigned long)ui->length, sha1);
-            free(d);
-            if (err != CRYPT_OK) {
-                return CHM_ENUMERATOR_FAILURE;
-            }
-        }
-    }
-
-    sha1_to_hex(sha1, sha1Hex);
-    if (needs_csv_escaping(ui->path)) {
-        printf("%d,%d,%d,%s,%s,\"%s\"\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
-               sha1Hex, ui->path);
-    } else {
-        printf("%1d,%d,%d,%s,%s,%s\n", (int)ui->space, (int)ui->start, (int)ui->length, buf,
-               sha1Hex, ui->path);
-    }
-
-    if (ui->length == 0 || !isFile) {
-        return CHM_ENUMERATOR_CONTINUE;
-    }
-
-    /* this should be redundant to isFile, but better be safe than sorry */
-    if (is_dir(ui->path)) {
-        return CHM_ENUMERATOR_CONTINUE;
-    }
-
-    return CHM_ENUMERATOR_CONTINUE;
-}
-
-static int test1(const char* file_name) {
-    struct chm_file* h = chm_open(file_name);
-    if (h == NULL) {
-        fprintf(stderr, "failed to open %s\n", file_name);
-        return 1;
-    }
-
-    if (!chm_enumerate(h, CHM_ENUMERATE_ALL, enum_cb, NULL)) {
-        printf("   *** ERROR ***\n");
-    }
-
-    chm_close(h);
-    return 0;
-}
-
 static int process_entry(struct chm_file* h, chm_entry* e) {
     char buf[128] = {0};
     uint8_t sha1[20] = {0};
@@ -163,7 +73,7 @@ static int process_entry(struct chm_file* h, chm_entry* e) {
         strcat(buf, "file");
 
     if (e->length > 0) {
-        uint8_t* d = extract_entry2(h, e);
+        uint8_t* d = extract_entry(h, e);
         if (d != NULL) {
             int err = sha1_process_all(d, (unsigned long)e->length, sha1);
             free(d);
@@ -184,15 +94,10 @@ static int process_entry(struct chm_file* h, chm_entry* e) {
     return 0;
 }
 
-static int test2(const char* file_name) {
-    struct chm_file* h = chm_open(file_name);
-    if (h == NULL) {
-        fprintf(stderr, "failed to open %s\n", file_name);
-        return 1;
-    }
-
+/* returns 0 if ok, != 0 on error */
+static int test_chm(chm_file* h) {
     chm_parse_result* res = chm_parse(h);
-    int err;
+    int err = 0;
     for (int i = 0; i < res->n_entries; i++) {
         err = process_entry(h, res->entries[i]);
         if (err != 0) {
@@ -200,11 +105,27 @@ static int test2(const char* file_name) {
             break;
         }
     }
-    chm_close(h);
-    return 0;
+    return err;
 }
 
-static int use_test1 = 0;
+static int test_fd(const char* path) {
+    fd_reader_ctx ctx;
+    if (!fd_reader_init(&ctx, path)) {
+        fprintf(stderr, "failed to open %s\n", path);
+        return 1;
+    }
+    chm_file f;
+    int ok = chm_init(&f, fd_reader, &ctx);
+    if (!ok) {
+        fd_reader_close(&ctx);
+        return 1;
+    }
+    ok = test_chm(&f);
+    chm_close(&f);
+    fd_reader_close(&ctx);
+    return ok;
+}
+
 static int show_dbg_out = 0;
 
 static void dbg_print(const char* s) {
@@ -219,12 +140,5 @@ int main(int c, char** v) {
     if (show_dbg_out) {
         chm_set_dbgprint(dbg_print);
     }
-    int res;
-    if (use_test1) {
-        res = test1(v[1]);
-    } else {
-        res = test2(v[1]);
-    }
-
-    return res;
+    return test_fd(v[1]);
 }

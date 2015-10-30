@@ -28,12 +28,6 @@
  *              a deal, at least until CHM v4 (MS .lit files), which also  *
  *              incorporate encryption, of some description.               *
  *                                                                         *
- * switches (Linux only):                                                  *
- *              CHM_USE_PREAD: compile library to use pread instead of     *
- *                             lseek/read                                  *
- *              CHM_USE_IO64:  compile library to support full 64-bit I/O  *
- *                             as is needed to properly deal with the      *
- *                             64-bit file offsets.                        *
  ***************************************************************************/
 
 /***************************************************************************
@@ -57,8 +51,7 @@
 #define strcasecmp stricmp
 #define strncasecmp strnicmp
 #else
-/* basic Linux system includes */
-/* #define _XOPEN_SOURCE 500 */
+/* #define _XOPEN_SOURCE 200809L */
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -81,44 +74,10 @@ static const char CHMU_RESET_TABLE[] =
 static const char CHMU_LZXC_CONTROLDATA[] = "::DataSpace/Storage/MSCompressed/ControlData";
 static const char CHMU_CONTENT[] = "::DataSpace/Storage/MSCompressed/Content";
 
-/* structure of ITSF headers */
 #define CHM_ITSF_V2_LEN 0x58
 #define CHM_ITSF_V3_LEN 0x60
-typedef struct itsf_hdr {
-    char signature[4];       /*  0 (ITSF) */
-    int32_t version;         /*  4 */
-    int32_t header_len;      /*  8 */
-    int32_t unknown_000c;    /*  c */
-    uint32_t last_modified;  /* 10 */
-    uint32_t lang_id;        /* 14 */
-    uint8_t dir_uuid[16];    /* 18 */
-    uint8_t stream_uuid[16]; /* 28 */
-    int64_t unknown_offset;  /* 38 */
-    int64_t unknown_len;     /* 40 */
-    int64_t dir_offset;      /* 48 */
-    int64_t dir_len;         /* 50 */
-    int64_t data_offset;     /* 58 (Not present before V3) */
-} itsf_hdr;
 
-/* structure of ITSP headers */
 #define CHM_ITSP_V1_LEN 0x54
-typedef struct itsp_hdr {
-    char signature[4];        /*  0 (ITSP) */
-    int32_t version;          /*  4 */
-    int32_t header_len;       /*  8 */
-    int32_t unknown_000c;     /*  c */
-    uint32_t block_len;       /* 10 */
-    int32_t blockidx_intvl;   /* 14 */
-    int32_t index_depth;      /* 18 */
-    int32_t index_root;       /* 1c */
-    int32_t index_head;       /* 20 */
-    int32_t unknown_0024;     /* 24 */
-    uint32_t num_blocks;      /* 28 */
-    int32_t unknown_002c;     /* 2c */
-    uint32_t lang_id;         /* 30 */
-    uint8_t system_uuid[16];  /* 34 */
-    uint8_t unknown_0044[16]; /* 44 */
-} itsp_hdr;
 
 /* structure of PMGL headers */
 static const char _chm_pmgl_marker[4] = "PMGL";
@@ -133,15 +92,6 @@ typedef struct pgml_hdr {
 
 /* structure of LZXC reset table */
 #define CHM_LZXC_RESETTABLE_V1_LEN 0x28
-struct chmLzxcResetTable {
-    uint32_t version;
-    uint32_t block_count;
-    uint32_t unknown;
-    uint32_t table_offset;
-    int64_t uncompressed_len;
-    int64_t compressed_len;
-    int64_t block_len;
-};
 
 /* structure of LZXC control data block */
 #define CHM_LZXC_MIN_LEN 0x18
@@ -156,14 +106,13 @@ struct chmLzxcControlData {
     uint32_t unknown_18;      /* 18        */
 };
 
-#define MAX_CACHE_BLOCKS 128
-
 void mem_reader_init(mem_reader_ctx* ctx, void* data, int64_t size) {
     ctx->data = data;
     ctx->size = size;
 }
 
-int64_t mem_reader(mem_reader_ctx* ctx, void* buf, int64_t off, int64_t len) {
+int64_t mem_reader(void* ctx_arg, void* buf, int64_t off, int64_t len) {
+    mem_reader_ctx* ctx = (mem_reader_ctx*)ctx_arg;
     int64_t toReadMax = ctx->size - off;
     if (toReadMax <= 0) {
         return -1;
@@ -177,43 +126,77 @@ int64_t mem_reader(mem_reader_ctx* ctx, void* buf, int64_t off, int64_t len) {
     return len;
 }
 
-/* the structure used for chm file handles */
-typedef struct chm_file {
-#ifdef WIN32
-    HANDLE fd;
-#else
-    int fd;
+int fd_reader_init(fd_reader_ctx* ctx, const char* path) {
+    ctx->fd = open(path, O_RDONLY);
+    return ctx->fd != -1;
+}
+
+void fd_reader_close(fd_reader_ctx* ctx) {
+    if (ctx->fd != -1) {
+        close(ctx->fd);
+    }
+}
+
+#if 0
+int64_t fd_reader(void* ctx_arg, void* buf, int64_t off, int64_t len) {
+  fd_reader_ctx *ctx = (fd_reader_ctx*)ctx_arg;
+  if (ctx->fd == -1) {
+    return -1;
+  }
+  return pread64(ctx->fd, buf, (long)len, off);
+}
 #endif
 
-    itsf_hdr itsf;
-    itsp_hdr itsp;
+int64_t fd_reader(void* ctx_arg, void* buf, int64_t off, int64_t len) {
+    fd_reader_ctx* ctx = (fd_reader_ctx*)ctx_arg;
+    if (ctx->fd == -1) {
+        return -1;
+    }
+    int64_t oldOff = lseek(ctx->fd, 0, SEEK_CUR);
+    lseek(ctx->fd, (long)off, SEEK_SET);
+    int64_t n = read(ctx->fd, buf, len);
+    lseek(ctx->fd, (long)oldOff, SEEK_SET);
+    return n;
+}
 
-    int64_t dir_offset;
-    int64_t dir_len;
+#ifdef WIN32
+int win_reader_init(win_reader_ctx* ctx, const WCHAR* path) {
+    ctx->fh = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                          FILE_ATTRIBUTE_NORMAL, NULL);
+  return ctx->fh != INVALID_HANDLE_VALUE)
+}
 
-    chm_unit_info rt_unit;
-    chm_unit_info cn_unit;
-    struct chmLzxcResetTable reset_table;
+void win_reader_close(win_reader_ctx* ctx) {
+    if (h != INVALID_HANDLE_VALUE) {
+        CloseHandle(h);
+    }
+}
 
-    /* LZX control data */
-    int compression_enabled;
-    uint32_t window_size;
-    uint32_t reset_interval;
-    uint32_t reset_blkcount;
+int64_t win_reader(void* ctx_arg, void* buf, int64_t off, int64_t len) {
+    win_reader_ctx* ctx = (win_reader_ctx*)ctx_arg;
+    int64_t n = 0, oldOs = 0;
+    if (h->fd == INVALID_HANDLE_VALUE)
+        return -1;
 
-    /* decompressor state */
-    struct LZXstate* lzx_state;
-    int lzx_last_block;
-    uint8_t* lzx_last_block_data;
+    /* NOTE: this might be better done with CreateFileMapping, et cetera... */
+    DWORD origOffsetLo = 0, origOffsetHi = 0;
+    DWORD offsetLo, offsetHi;
+    DWORD actualLen = 0;
 
-    /* cache for decompressed blocks */
-    uint8_t* cache_blocks[MAX_CACHE_BLOCKS];
-    int64_t cache_block_indices[MAX_CACHE_BLOCKS];
-    int cache_num_blocks;
+    offsetLo = (unsigned int)(off & 0xffffffffL);
+    offsetHi = (unsigned int)((off >> 32) & 0xffffffffL);
+    origOffsetLo = SetFilePointer(h->fh, 0, &origOffsetHi, FILE_CURRENT);
+    offsetLo = SetFilePointer(h->fh, offsetLo, &offsetHi, FILE_BEGIN);
 
-    chm_parse_result parse_result;
-    int has_parse_result;
-} chm_file;
+    if (ReadFile(h->fh, buf, (DWORD)len, &actualLen, NULL) == TRUE)
+        n = actualLen;
+    else
+        n = -1;
+
+    SetFilePointer(h->fh, origOffsetLo, &origOffsetHi, FILE_BEGIN);
+    return n;
+}
+#endif
 
 /* structure of PMGI headers */
 static const char _chm_pmgi_marker[4] = "PMGI";
@@ -651,116 +634,27 @@ static int _unmarshal_lzxc_control_data(unsigned char** pData, unsigned int* pDa
     return 1;
 }
 
-#ifdef WIN32
-static void close_file(HANDLE h) {
-    if (h != INVALID_HANDLE_VALUE) {
-        CloseHandle(h);
-    }
+static void memzero(void* d, size_t len) {
+    memset(d, 0, len);
 }
 
-static int64_t read_bytes(chm_file* h, uint8_t* buf, int64_t os, int64_t len) {
-    int64_t readLen = 0, oldOs = 0;
-    if (h->fd == INVALID_HANDLE_VALUE)
-        return readLen;
-
-    /* NOTE: this might be better done with CreateFileMapping, et cetera... */
-    DWORD origOffsetLo = 0, origOffsetHi = 0;
-    DWORD offsetLo, offsetHi;
-    DWORD actualLen = 0;
-
-    /* awkward Win32 Seek/Tell */
-    offsetLo = (unsigned int)(os & 0xffffffffL);
-    offsetHi = (unsigned int)((os >> 32) & 0xffffffffL);
-    origOffsetLo = SetFilePointer(h->fd, 0, &origOffsetHi, FILE_CURRENT);
-    offsetLo = SetFilePointer(h->fd, offsetLo, &offsetHi, FILE_BEGIN);
-
-    /* read the data */
-    if (ReadFile(h->fd, buf, (DWORD)len, &actualLen, NULL) == TRUE)
-        readLen = actualLen;
-    else
-        readLen = 0;
-
-    /* restore original position */
-    SetFilePointer(h->fd, origOffsetLo, &origOffsetHi, FILE_BEGIN);
-    return readLen;
-}
-#else
-static void close_file(int fd) {
-    if (fd != -1) {
-        close(-1);
-    }
+static int64_t read_bytes(chm_file* h, uint8_t* buf, int64_t off, int64_t len) {
+    int64_t n = h->read_func(h->read_ctx, buf, off, len);
+    /*printf("read_bytes: %d@%d => %d\n", (int)len, (int)off, (int)n); */
+    return n;
 }
 
-static int64_t read_bytes(chm_file* h, uint8_t* buf, int64_t os, int64_t len) {
-    int64_t readLen = 0, oldOs = 0;
-    if (h->fd == -1)
-        return readLen;
-
-#ifdef CHM_USE_PREAD
-#ifdef CHM_USE_IO64
-    readLen = pread64(h->fd, buf, (long)len, os);
-#else
-    readLen = pread(h->fd, buf, (long)len, (unsigned int)os);
-#endif
-#else
-#ifdef CHM_USE_IO64
-    oldOs = lseek64(h->fd, 0, SEEK_CUR);
-    lseek64(h->fd, os, SEEK_SET);
-    readLen = read(h->fd, buf, len);
-    lseek64(h->fd, oldOs, SEEK_SET);
-#else
-    oldOs = lseek(h->fd, 0, SEEK_CUR);
-    lseek(h->fd, (long)os, SEEK_SET);
-    readLen = read(h->fd, buf, len);
-    lseek(h->fd, (long)oldOs, SEEK_SET);
-#endif
-#endif
-    return readLen;
-}
-#endif
-
-/* open an ITS archive */
-#ifdef PPC_BSTR
-chm_file* chm_open(BSTR filename)
-#else
-chm_file* chm_open(const char* filename)
-#endif
-{
+int chm_init(chm_file* h, chm_reader read_func, void* read_ctx) {
     unsigned char buf[256];
     unsigned int n;
     unsigned char* tmp;
-    chm_file* h = NULL;
     chm_unit_info uiLzxc;
     struct chmLzxcControlData ctlData;
     unmarshaller u;
 
-    /* allocate handle */
-    h = (chm_file*)calloc(1, sizeof(chm_file));
-    if (h == NULL)
-        return NULL;
-
-/* open file */
-#ifdef WIN32
-#ifdef PPC_BSTR
-    if ((h->fd = CreateFile(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
-                            FILE_ATTRIBUTE_NORMAL, NULL)) == INVALID_HANDLE_VALUE) {
-        free(h);
-        return NULL;
-    }
-#else
-    if ((h->fd = CreateFileA(filename, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
-                             NULL)) == INVALID_HANDLE_VALUE) {
-        free(h);
-        return NULL;
-    }
-#endif
-#else
-    h->fd = open(filename, O_RDONLY);
-    if (h->fd == -1) {
-        free(h);
-        return NULL;
-    }
-#endif
+    memzero(h, sizeof(chm_file));
+    h->read_func = read_func;
+    h->read_ctx = read_ctx;
 
     /* read and verify header */
     n = CHM_ITSF_V3_LEN;
@@ -775,7 +669,7 @@ chm_file* chm_open(const char* filename)
     }
 
     n = CHM_ITSP_V1_LEN;
-    if (read_bytes(h, buf, (int64_t)h->itsf.dir_offset, n) != n) {
+    if (read_func(read_ctx, buf, (int64_t)h->itsf.dir_offset, n) != n) {
         goto Error;
     }
     unmarshaller_init(&u, (uint8_t*)buf, n);
@@ -839,10 +733,10 @@ chm_file* chm_open(const char* filename)
     }
 
     chm_set_cache_size(h, CHM_MAX_BLOCKS_CACHED);
-    return h;
+    return 1;
 Error:
     chm_close(h);
-    return NULL;
+    return 0;
 }
 
 static void free_entries(chm_entry* first) {
@@ -860,7 +754,6 @@ void chm_close(chm_file* h) {
     if (h == NULL) {
         return;
     }
-    close_file(h->fd);
 
     if (h->lzx_state)
         LZXteardown(h->lzx_state);
@@ -874,7 +767,6 @@ void chm_close(chm_file* h) {
         }
         free(h->parse_result.entries);
     }
-    free(h);
 }
 
 /*
