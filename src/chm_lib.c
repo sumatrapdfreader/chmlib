@@ -370,22 +370,6 @@ static int _unmarshal_uint32(unsigned char** pData, unsigned int* pLenRemain, ui
     return 1;
 }
 
-static int _unmarshal_int64(unsigned char** pData, unsigned int* pLenRemain, int64_t* dest) {
-    int64_t temp;
-    int i;
-    if (8 > *pLenRemain)
-        return 0;
-    temp = 0;
-    for (i = 8; i > 0; i--) {
-        temp <<= 8;
-        temp |= (*pData)[i - 1];
-    }
-    *dest = temp;
-    *pData += 8;
-    *pLenRemain -= 8;
-    return 1;
-}
-
 static bool unmarshal_itsf_header(unmarshaller* u, itsf_hdr* hdr) {
     get_pchar(u, hdr->signature, 4);
     hdr->version = get_int32(u);
@@ -494,29 +478,31 @@ static int unmarshal_pmgl_header(unmarshaller* u, unsigned int blockLen, pgml_hd
     return 1;
 }
 
-static int _unmarshal_lzxc_reset_table(unsigned char** pData, unsigned int* pDataLen,
-                                       struct chmLzxcResetTable* dest) {
-    /* we only know how to deal with a 0x28 byte structures */
-    if (*pDataLen != CHM_LZXC_RESETTABLE_V1_LEN)
-        return 0;
+static bool unmarshal_lzxc_reset_table(unmarshaller* u, struct chmLzxcResetTable* dest) {
+    dest->version = get_uint32(u);
+    dest->block_count = get_uint32(u);
+    dest->unknown = get_uint32(u);
+    dest->table_offset = get_uint32(u);
+    dest->uncompressed_len = get_int64(u);
+    dest->compressed_len = get_int64(u);
+    dest->block_len = get_int64(u);
 
-    _unmarshal_uint32(pData, pDataLen, &dest->version);
-    _unmarshal_uint32(pData, pDataLen, &dest->block_count);
-    _unmarshal_uint32(pData, pDataLen, &dest->unknown);
-    _unmarshal_uint32(pData, pDataLen, &dest->table_offset);
-    _unmarshal_int64(pData, pDataLen, &dest->uncompressed_len);
-    _unmarshal_int64(pData, pDataLen, &dest->compressed_len);
-    _unmarshal_int64(pData, pDataLen, &dest->block_len);
+    if (!u->ok) {
+        return false;
+    }
 
-    if (dest->version != 2)
-        return 0;
+    if (dest->version != 2) {
+        return false;
+    }
     /* sanity check (huge values are usually due to broken files) */
-    if (dest->uncompressed_len > UINT_MAX || dest->compressed_len > UINT_MAX)
-        return 0;
-    if (dest->block_len == 0 || dest->block_len > UINT_MAX)
-        return 0;
+    if (dest->uncompressed_len > UINT_MAX || dest->compressed_len > UINT_MAX) {
+        return false;
+    }
+    if (dest->block_len == 0 || dest->block_len > UINT_MAX) {
+        return false;
+    }
 
-    return 1;
+    return true;
 }
 
 static int _unmarshal_lzxc_control_data(unsigned char** pData, unsigned int* pDataLen,
@@ -988,6 +974,24 @@ Error:
     goto Exit;
 }
 
+static void parse_lzxc_reset_table(chm_file* h) {
+    /* read reset table info */
+    if (!h->compression_enabled) {
+        return;
+    }
+    int64_t n = CHM_LZXC_RESETTABLE_V1_LEN;
+    uint8_t buf[CHM_LZXC_RESETTABLE_V1_LEN];
+    if (chm_retrieve_entry(h, h->rt_unit, buf, 0, n) != n) {
+        h->compression_enabled = false;
+        return;
+    }
+    unmarshaller u;
+    unmarshaller_init(&u, buf, n);
+    if (!unmarshal_lzxc_reset_table(&u, &h->reset_table)) {
+        h->compression_enabled = false;
+    }
+}
+
 bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
     unsigned char buf[256];
     unsigned int n;
@@ -1035,7 +1039,7 @@ bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
     if (h->itsp.index_root <= -1)
         h->itsp.index_root = h->itsp.index_head;
 
-    h->compression_enabled = 1;
+    h->compression_enabled = true;
 
     parse_entries(h);
     if (h->n_entries == 0) {
@@ -1055,18 +1059,10 @@ bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
 
     if (is_null_or_compressed(h->rt_unit) || is_null_or_compressed(h->cn_unit) ||
         is_null_or_compressed(uiLzxc)) {
-        h->compression_enabled = 0;
+        h->compression_enabled = false;
     }
 
-    /* read reset table info */
-    if (h->compression_enabled) {
-        n = CHM_LZXC_RESETTABLE_V1_LEN;
-        tmp = buf;
-        if (chm_retrieve_entry(h, h->rt_unit, buf, 0, n) != n ||
-            !_unmarshal_lzxc_reset_table(&tmp, &n, &h->reset_table)) {
-            h->compression_enabled = 0;
-        }
-    }
+    parse_lzxc_reset_table(h);
 
     /* read control data */
     if (h->compression_enabled) {
@@ -1078,7 +1074,7 @@ bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
         tmp = buf;
         if (chm_retrieve_entry(h, uiLzxc, buf, 0, n) != n ||
             !_unmarshal_lzxc_control_data(&tmp, &n, &ctlData)) {
-            h->compression_enabled = 0;
+            h->compression_enabled = false;
         } else {
             /* prevent division by zero */
             h->window_size = ctlData.windowSize;

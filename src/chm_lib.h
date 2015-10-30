@@ -171,7 +171,7 @@ typedef struct chm_file {
     struct chmLzxcResetTable reset_table;
 
     /* LZX control data */
-    int compression_enabled;
+    bool compression_enabled;
     uint32_t window_size;
     uint32_t reset_interval;
     uint32_t reset_blkcount;
