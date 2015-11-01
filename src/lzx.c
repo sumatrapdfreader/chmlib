@@ -1,4 +1,3 @@
-/* $Id: lzx.c,v 1.5 2002/10/09 01:16:33 jedwin Exp $ */
 /***************************************************************************
  *                        lzx.c - LZX decompression routines               *
  *                           -------------------                           *
@@ -69,7 +68,7 @@ typedef signed int LONG;      /* 32 bits (or more) */
     UWORD tbl##_table[(1 << LZX_##tbl##_TABLEBITS) + (LZX_##tbl##_MAXSYMBOLS << 1)]; \
     UBYTE tbl##_len[LZX_##tbl##_MAXSYMBOLS + LZX_LENTABLE_SAFETY]
 
-struct LZXstate {
+struct lzx_state {
     UBYTE* window;         /* the actual decoding window              */
     ULONG window_size;     /* window size (32Kb through 2Mb)          */
     ULONG actual_size;     /* window size when it was first allocated */
@@ -157,8 +156,8 @@ static const ULONG position_base[51] = {
     98304,   131072,  196608,  262144,  393216,  524288,  655360, 786432, 917504, 1048576, 1179648,
     1310720, 1441792, 1572864, 1703936, 1835008, 1966080, 2097152};
 
-struct LZXstate* LZXinit(int window) {
-    struct LZXstate* pState = NULL;
+struct lzx_state* lzx_init(int window) {
+    struct lzx_state* pState = NULL;
     ULONG wndsize = 1 << window;
     int i, posn_slots;
 
@@ -168,7 +167,7 @@ struct LZXstate* LZXinit(int window) {
         return NULL;
 
     /* allocate state and associated window */
-    pState = (struct LZXstate*)malloc(sizeof(struct LZXstate));
+    pState = (struct lzx_state*)malloc(sizeof(struct lzx_state));
     if (!pState || !(pState->window = (UBYTE*)malloc(wndsize))) {
         free(pState);
         return NULL;
@@ -207,7 +206,7 @@ struct LZXstate* LZXinit(int window) {
     return pState;
 }
 
-void LZXteardown(struct LZXstate* pState) {
+void lzx_teardown(struct lzx_state* pState) {
     if (pState) {
         if (pState->window)
             free(pState->window);
@@ -215,7 +214,7 @@ void LZXteardown(struct LZXstate* pState) {
     }
 }
 
-int LZXreset(struct LZXstate* pState) {
+void lzx_reset(struct lzx_state* pState) {
     int i;
 
     pState->R0 = pState->R1 = pState->R2 = 1;
@@ -227,12 +226,13 @@ int LZXreset(struct LZXstate* pState) {
     pState->intel_started = 0;
     pState->window_posn = 0;
 
-    for (i = 0; i < LZX_MAINTREE_MAXSYMBOLS + LZX_LENTABLE_SAFETY; i++)
+    for (i = 0; i < LZX_MAINTREE_MAXSYMBOLS + LZX_LENTABLE_SAFETY; i++) {
         pState->MAINTREE_len[i] = 0;
-    for (i = 0; i < LZX_LENGTH_MAXSYMBOLS + LZX_LENTABLE_SAFETY; i++)
-        pState->LENGTH_len[i] = 0;
+    }
 
-    return DECR_OK;
+    for (i = 0; i < LZX_LENGTH_MAXSYMBOLS + LZX_LENTABLE_SAFETY; i++) {
+        pState->LENGTH_len[i] = 0;
+    }
 }
 
 /* Bitstream reading macros:
@@ -435,7 +435,7 @@ struct lzx_bits {
     UBYTE* ip;
 };
 
-static int lzx_read_lens(struct LZXstate* pState, UBYTE* lens, ULONG first, ULONG last,
+static int lzx_read_lens(struct lzx_state* pState, UBYTE* lens, ULONG first, ULONG last,
                          struct lzx_bits* lb) {
     ULONG i, j, x, y;
     int z;
@@ -486,8 +486,8 @@ static int lzx_read_lens(struct LZXstate* pState, UBYTE* lens, ULONG first, ULON
     return 0;
 }
 
-int LZXdecompress(struct LZXstate* pState, unsigned char* inpos, unsigned char* outpos, int inlen,
-                  int outlen) {
+int lzx_decompress(struct lzx_state* pState, unsigned char* inpos, unsigned char* outpos, int inlen,
+                   int outlen) {
     UBYTE* endinp = inpos + inlen;
     UBYTE* window = pState->window;
     UBYTE* runsrc, *rundest;
@@ -807,7 +807,7 @@ int LZXdecompress(struct LZXstate* pState, unsigned char* inpos, unsigned char* 
 #ifdef LZX_CHM_TESTDRIVER
 int main(int c, char** v) {
     FILE* fin, *fout;
-    struct LZXstate state;
+    struct lzx_state state;
     UBYTE ibuf[16384];
     UBYTE obuf[32768];
     int ilen, olen;
@@ -815,12 +815,12 @@ int main(int c, char** v) {
     int i;
     int count = 0;
     int w = atoi(v[1]);
-    LZXinit(&state, w);
+    lzx_init(&state, w);
     fout = fopen(v[2], "wb");
     for (i = 3; i < c; i++) {
         fin = fopen(v[i], "rb");
         ilen = fread(ibuf, 1, 16384, fin);
-        status = LZXdecompress(&state, ibuf, obuf, ilen, 32768);
+        status = lzx_decompress(&state, ibuf, obuf, ilen, 32768);
         switch (status) {
             case DECR_OK:
                 printf("ok\n");
@@ -841,7 +841,7 @@ int main(int c, char** v) {
         fclose(fin);
         if (++count == 2) {
             count = 0;
-            LZXreset(&state);
+            lzx_reset(&state);
         }
     }
     fclose(fout);

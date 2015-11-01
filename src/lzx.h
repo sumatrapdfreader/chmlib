@@ -1,14 +1,13 @@
-/* $Id: lzx.h,v 1.5 2002/10/08 03:43:33 jedwin Exp $ */
 /***************************************************************************
- *                        lzx.h - LZX decompression routines               *
- *                           -------------------                           *
- *                                                                         *
- *  maintainer: Jed Wing <jedwin@ugcs.caltech.edu>                         *
- *  source:     modified lzx.c from cabextract v0.5                        *
- *  notes:      This file was taken from cabextract v0.5, which was,       *
- *              itself, a modified version of the lzx decompression code   *
- *              from unlzx.                                                *
- ***************************************************************************/
+*                        lzx.h - LZX decompression routines               *
+*                           -------------------                           *
+*                                                                         *
+*  maintainer: Jed Wing <jedwin@ugcs.caltech.edu>                         *
+*  source:     modified lzx.c from cabextract v0.5                        *
+*  notes:      This file was taken from cabextract v0.5, which was,       *
+*              itself, a modified version of the lzx decompression code   *
+*              from unlzx.                                                *
+***************************************************************************/
 
 /***************************************************************************
  *                                                                         *
@@ -37,20 +36,20 @@ extern "C" {
 #define DECR_NOMEMORY (3)
 
 /* opaque state structure */
-struct LZXstate;
+struct lzx_state;
 
 /* create an lzx state object */
-struct LZXstate* LZXinit(int window);
+struct lzx_state* lzx_init(int window);
 
 /* destroy an lzx state object */
-void LZXteardown(struct LZXstate* pState);
+void lzx_teardown(struct lzx_state* pState);
 
 /* reset an lzx stream */
-int LZXreset(struct LZXstate* pState);
+void lzx_reset(struct lzx_state* pState);
 
 /* decompress an LZX compressed block */
-int LZXdecompress(struct LZXstate* pState, unsigned char* inpos, unsigned char* outpos, int inlen,
-                  int outlen);
+int lzx_decompress(struct lzx_state* pState, unsigned char* inpos, unsigned char* outpos, int inlen,
+                   int outlen);
 
 #ifdef __cplusplus
 }

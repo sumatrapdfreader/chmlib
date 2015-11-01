@@ -1,4 +1,3 @@
-/* $Id: chm_lib.h,v 1.10 2002/10/09 01:16:33 jedwin Exp $ */
 /***************************************************************************
  *             chm_lib.h - CHM archive manipulation routines               *
  *                           -------------------                           *
@@ -82,16 +81,14 @@ int64_t mem_reader(void* ctx, void* buf, int64_t off, int64_t len);
 
 typedef struct fd_reader_ctx { int fd; } fd_reader_ctx;
 
-/* returns 1 on success, 0 on error */
-int fd_reader_init(fd_reader_ctx* ctx, const char* path);
+bool fd_reader_init(fd_reader_ctx* ctx, const char* path);
 void fd_reader_close(fd_reader_ctx* ctx);
 int64_t fd_reader(void* ctx, void* buf, int64_t off, int64_t len);
 
 #ifdef WIN32
 typedef struct win_reader_ctx { HANDLE fh; } win_reader_ctx;
 
-/* returns 1 on sucesses, 0 on error */
-int win_reader_init(win_reader_ctx* ctx, const WCHAR* path);
+bool win_reader_init(win_reader_ctx* ctx, const WCHAR* path);
 void win_reader_close(win_reader_ctx* ctx);
 int64_t win_reader(void* ctx, void* buf, int64_t off, int64_t len);
 #endif
@@ -176,7 +173,7 @@ typedef struct chm_file {
     uint32_t reset_blkcount;
 
     /* decompressor state */
-    struct LZXstate* lzx_state;
+    struct lzx_state* lzx_state;
     int lzx_last_block;
     uint8_t* lzx_last_block_data;
 

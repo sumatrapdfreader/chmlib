@@ -126,7 +126,7 @@ int64_t mem_reader(void* ctx_arg, void* buf, int64_t off, int64_t len) {
     return len;
 }
 
-int fd_reader_init(fd_reader_ctx* ctx, const char* path) {
+bool fd_reader_init(fd_reader_ctx* ctx, const char* path) {
     ctx->fd = open(path, O_RDONLY);
     return ctx->fd != -1;
 }
@@ -160,7 +160,7 @@ int64_t fd_reader(void* ctx_arg, void* buf, int64_t off, int64_t len) {
 }
 
 #ifdef WIN32
-int win_reader_init(win_reader_ctx* ctx, const WCHAR* path) {
+bool win_reader_init(win_reader_ctx* ctx, const WCHAR* path) {
     ctx->fh = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
                           FILE_ATTRIBUTE_NORMAL, NULL);
   return ctx->fh != INVALID_HANDLE_VALUE)
@@ -562,7 +562,7 @@ void chm_close(chm_file* h) {
     }
 
     if (h->lzx_state)
-        LZXteardown(h->lzx_state);
+        lzx_teardown(h->lzx_state);
 
     for (int i = 0; i < h->cache_num_blocks; i++) {
         free(h->cache_blocks[i]);
@@ -719,7 +719,7 @@ static uint8_t* uncompress_block(chm_file* h, int64_t nBlock) {
     }
 
     if (nBlock % h->reset_blkcount == 0) {
-        LZXreset(h->lzx_state);
+        lzx_reset(h->lzx_state);
     }
 
     uint8_t* buf = malloc(blockSize + 6144);
@@ -744,7 +744,7 @@ static uint8_t* uncompress_block(chm_file* h, int64_t nBlock) {
         goto Error;
     }
 
-    int res = LZXdecompress(h->lzx_state, buf, uncompressed, (int)cmpLen, (int)blockSize);
+    int res = lzx_decompress(h->lzx_state, buf, uncompressed, (int)cmpLen, (int)blockSize);
     if (res != DECR_OK) {
         dbgprintf("   (DECOMPRESS FAILED!)\n");
         goto Error;
@@ -810,7 +810,7 @@ static int64_t decompress_region(chm_file* h, uint8_t* buf, int64_t start, int64
     if (!h->lzx_state) {
         int window_size = ffs(h->window_size) - 1;
         h->lzx_last_block = -1;
-        h->lzx_state = LZXinit(window_size);
+        h->lzx_state = lzx_init(window_size);
     }
 
     int64_t gotLen = decompress_block(h, nBlock, &ubuffer);
