@@ -1,4 +1,3 @@
-/* $Id: extract_chmLib.c,v 1.4 2002/10/10 03:24:51 jedwin Exp $ */
 /***************************************************************************
  *          extract_chmLib.c - CHM archive extractor                       *
  *                           -------------------                           *
@@ -85,90 +84,107 @@ static int rmkdir(char* path) {
 #endif
 }
 
-/*
- * callback function for enumerate API
- */
-static int _extract_callback(struct chm_file* h, chm_unit_info* ui, void* context) {
-    int64_t ui_path_len;
-    char buffer[32768];
-    struct extract_context* ctx = (struct extract_context*)context;
+static bool extract_entry(chm_file* h, chm_entry* e, const char* base_path) {
+    int64_t path_len;
+    char buf[32768];
     char* i;
 
-    if (ui->path[0] != '/')
-        return CHM_ENUMERATOR_CONTINUE;
+    if (e->path[0] != '/')
+        return true;
 
     /* quick hack for security hole mentioned by Sven Tantau */
-    if (strstr(ui->path, "/../") != NULL) {
+    if (strstr(e->path, "/../") != NULL) {
         /* fprintf(stderr, "Not extracting %s (dangerous path)\n", ui->path); */
-        return CHM_ENUMERATOR_CONTINUE;
+        return true;
     }
 
-    if (snprintf(buffer, sizeof(buffer), "%s%s", ctx->base_path, ui->path) > 1024)
-        return CHM_ENUMERATOR_FAILURE;
+    if (snprintf(buf, sizeof(buf), "%s%s", base_path, e->path) > 1024) {
+        return false;
+    }
 
     /* Get the length of the path */
-    ui_path_len = strlen(ui->path) - 1;
+    path_len = strlen(e->path) - 1;
 
-    /* Distinguish between files and dirs */
-    if (ui->path[ui_path_len] != '/') {
-        FILE* fout;
-        int64_t len, remain = (int64_t)ui->length;
-        int64_t offset = 0;
-
-        printf("--> %s\n", ui->path);
-        if ((fout = fopen(buffer, "wb")) == NULL) {
-            /* make sure that it isn't just a missing directory before we abort */
-            char newbuf[32768];
-            strcpy(newbuf, buffer);
-            i = strrchr(newbuf, '/');
-            *i = '\0';
-            rmkdir(newbuf);
-            if ((fout = fopen(buffer, "wb")) == NULL)
-                return CHM_ENUMERATOR_FAILURE;
-        }
-
-        while (remain != 0) {
-            len = chm_retrieve_object(h, ui, (unsigned char*)buffer, offset, 32768);
-            if (len > 0) {
-                fwrite(buffer, 1, (size_t)len, fout);
-                offset += (int64_t)len;
-                remain -= len;
-            } else {
-                fprintf(stderr, "incomplete file: %s\n", ui->path);
-                break;
-            }
-        }
-
-        fclose(fout);
-    } else {
-        if (rmkdir(buffer) == -1)
-            return CHM_ENUMERATOR_FAILURE;
+    if (e->path[path_len] == '/') {
+        /* this is directory */
+        return rmkdir(buf) != -1;
     }
 
-    return CHM_ENUMERATOR_CONTINUE;
+    /* this is file */
+    FILE* fout;
+    int64_t len, remain = (int64_t)e->length;
+    int64_t offset = 0;
+
+    printf("--> %s\n", e->path);
+    if ((fout = fopen(buf, "wb")) == NULL) {
+        /* make sure that it isn't just a missing directory before we abort */
+        char newbuf[32768];
+        strcpy(newbuf, buf);
+        i = strrchr(newbuf, '/');
+        *i = '\0';
+        rmkdir(newbuf);
+        if ((fout = fopen(buf, "wb")) == NULL)
+            return false;
+    }
+
+    while (remain != 0) {
+        len = chm_retrieve_entry(h, e, (uint8_t*)buf, offset, sizeof(buf));
+        if (len > 0) {
+            fwrite(buf, 1, (size_t)len, fout);
+            offset += (int64_t)len;
+            remain -= len;
+        } else {
+            fprintf(stderr, "incomplete file: %s\n", e->path);
+            break;
+        }
+    }
+
+    fclose(fout);
+    return true;
+}
+
+static bool extract(chm_file* h, const char* base_path) {
+    /* extract as many entries as possible */
+    for (int i = 0; i < h->n_entries; i++) {
+        if (!extract_entry(h, h->entries[i], base_path)) {
+            return false;
+        }
+    }
+    if (h->parse_entries_failed) {
+        return false;
+    }
+    return true;
+}
+
+static bool extract_fd(const char* path, const char* base_path) {
+    fd_reader_ctx ctx;
+    if (!fd_reader_init(&ctx, path)) {
+        fprintf(stderr, "failed to open %s\n", path);
+        return false;
+    }
+    chm_file f;
+    bool ok = chm_parse(&f, fd_reader, &ctx);
+    if (!ok) {
+        fprintf(stderr, "chm_parse() failed\n");
+        fd_reader_close(&ctx);
+        return false;
+    }
+    printf("%s:\n", path);
+    ok = extract(&f, base_path);
+    chm_close(&f);
+    fd_reader_close(&ctx);
+    return ok;
 }
 
 int main(int c, char** v) {
-    struct chm_file* h;
-    struct extract_context ec;
-
     if (c < 3) {
         fprintf(stderr, "usage: %s <chmfile> <outdir>\n", v[0]);
         exit(1);
     }
 
-    h = chm_open(v[1]);
-    if (h == NULL) {
-        fprintf(stderr, "failed to open %s\n", v[1]);
-        exit(1);
-    }
-
-    printf("%s:\n", v[1]);
-    ec.base_path = v[2];
-    if (!chm_enumerate(h, CHM_ENUMERATE_ALL, _extract_callback, (void*)&ec))
+    bool ok = extract_fd(v[1], v[2]);
+    if (!ok) {
         printf("   *** ERROR ***\n");
-
-    chm_close(h);
-
+    }
     return 0;
 }

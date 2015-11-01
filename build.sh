@@ -7,5 +7,5 @@ set -o pipefail
 source ./build_common.sh
 
 #gcc_rel
-clang_rel_one
-#clang_rel
+#clang_rel_one
+clang_rel
