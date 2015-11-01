@@ -1,4 +1,3 @@
-/* $Id: enum_chmLib.c,v 1.7 2002/10/09 12:38:12 jedwin Exp $ */
 /***************************************************************************
  *          enum_chmLib.c - CHM archive test driver                        *
  *                           -------------------                           *
@@ -30,50 +29,62 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define UNUSED(x) (void) x
+static void print_entry(chm_entry* e) {
+    char buf[128] = {0};
 
-static int _print_ui(struct chm_file* h, chm_unit_info* ui, void* context) {
-    static char szBuf[128] = {0};
+    if (e->flags & CHM_ENUMERATE_NORMAL)
+        strcpy(buf, "normal ");
+    else if (e->flags & CHM_ENUMERATE_SPECIAL)
+        strcpy(buf, "special ");
+    else if (e->flags & CHM_ENUMERATE_META)
+        strcpy(buf, "meta ");
 
-    UNUSED(h);
-    UNUSED(context);
+    if (e->flags & CHM_ENUMERATE_DIRS)
+        strcat(buf, "dir");
+    else if (e->flags & CHM_ENUMERATE_FILES)
+        strcat(buf, "file");
 
-    if (ui->flags & CHM_ENUMERATE_NORMAL)
-        strcpy(szBuf, "normal ");
-    else if (ui->flags & CHM_ENUMERATE_SPECIAL)
-        strcpy(szBuf, "special ");
-    else if (ui->flags & CHM_ENUMERATE_META)
-        strcpy(szBuf, "meta ");
+    printf("   %1d %8d %8d   %s\t\t%s\n", (int)e->space, (int)e->start, (int)e->length, buf,
+           e->path);
+}
 
-    if (ui->flags & CHM_ENUMERATE_DIRS)
-        strcat(szBuf, "dir");
-    else if (ui->flags & CHM_ENUMERATE_FILES)
-        strcat(szBuf, "file");
-
-    printf("   %1d %8d %8d   %s\t\t%s\n", (int)ui->space, (int)ui->start, (int)ui->length, szBuf,
-           ui->path);
-    return CHM_ENUMERATOR_CONTINUE;
+static bool enum_fd(const char* path) {
+    fd_reader_ctx ctx;
+    if (!fd_reader_init(&ctx, path)) {
+        fprintf(stderr, "failed to open %s\n", path);
+        return false;
+    }
+    chm_file f;
+    bool ok = chm_parse(&f, fd_reader, &ctx);
+    if (!ok) {
+        fprintf(stderr, "chm_parse() failed\n");
+        fd_reader_close(&ctx);
+        return false;
+    }
+    for (int i = 0; i < f.n_entries; i++) {
+          print_entry(f.entries[i]);
+    }
+    if (f.parse_entries_failed) {
+        return false;
+    }
+    chm_close(&f);
+    fd_reader_close(&ctx);
+    return true;
 }
 
 int main(int c, char** v) {
-    struct chm_file* h;
-    int i;
+    for (int i = 1; i < c; i++) {
+      const char *path = v[i];
 
-    for (i = 1; i < c; i++) {
-        h = chm_open(v[i]);
-        if (h == NULL) {
-            fprintf(stderr, "failed to open %s\n", v[i]);
-            exit(1);
-        }
-
-        printf("%s:\n", v[i]);
+        printf("%s:\n", path);
         printf(" spc    start   length   type\t\t\tname\n");
         printf(" ===    =====   ======   ====\t\t\t====\n");
 
-        if (!chm_enumerate(h, CHM_ENUMERATE_ALL, _print_ui, NULL))
+        bool ok = enum_fd(path);
+        if (!ok) {
             printf("   *** ERROR ***\n");
-
-        chm_close(h);
+            exit(1);
+        }
     }
 
     return 0;
