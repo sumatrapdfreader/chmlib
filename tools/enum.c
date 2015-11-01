@@ -61,7 +61,12 @@ static bool enum_fd(const char* path) {
         fd_reader_close(&ctx);
         return false;
     }
-    print_entry(&f);
+    for (int i = 0; i < f.n_entries; i++) {
+          print_entry(f.entries[i]);
+    }
+    if (f.parse_entries_failed) {
+        return false;
+    }
     chm_close(&f);
     fd_reader_close(&ctx);
     return true;

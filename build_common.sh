@@ -19,7 +19,7 @@ clang_rel()
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
   $CC -o $OUT/extract $CFLAGS $CHM_SRCS tools/extract.c
-  $CC -o $OUT/enum_chmLib $CFLAGS $CHM_SRCS tools/enum_chmLib.c
+  $CC -o $OUT/enum $CFLAGS $CHM_SRCS tools/enum.c
   #$CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
 
@@ -42,7 +42,7 @@ clang_dbg()
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
   $CC -o $OUT/extract $CFLAGS $CHM_SRCS tools/extract.c
-  $CC -o $OUT/enum_chmLib $CFLAGS $CHM_SRCS tools/enum_chmLib.c
+  $CC -o $OUT/enum $CFLAGS $CHM_SRCS tools/enum.c
   #$CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
 
@@ -55,6 +55,6 @@ gcc_rel()
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
   $CC -o $OUT/extract $CFLAGS $CHM_SRCS tools/extract.c
-  $CC -o $OUT/enum_chmLib $CFLAGS $CHM_SRCS tools/enum_chmLib.c
+  $CC -o $OUT/enum $CFLAGS $CHM_SRCS tools/enum.c
   #$CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
