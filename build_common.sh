@@ -20,7 +20,7 @@ clang_rel()
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
   $CC -o $OUT/extract $CFLAGS $CHM_SRCS tools/extract.c
   $CC -o $OUT/enum $CFLAGS $CHM_SRCS tools/enum.c
-  #$CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
+  $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
 
 clang_rel_one()
@@ -31,7 +31,7 @@ clang_rel_one()
   OUT=obj/clang/rel
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
-  #$CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
+  $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
 
 clang_dbg()
@@ -43,7 +43,7 @@ clang_dbg()
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
   $CC -o $OUT/extract $CFLAGS $CHM_SRCS tools/extract.c
   $CC -o $OUT/enum $CFLAGS $CHM_SRCS tools/enum.c
-  #$CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
+  $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
 
 gcc_rel()
@@ -56,5 +56,5 @@ gcc_rel()
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
   $CC -o $OUT/extract $CFLAGS $CHM_SRCS tools/extract.c
   $CC -o $OUT/enum $CFLAGS $CHM_SRCS tools/enum.c
-  #$CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
+  $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
