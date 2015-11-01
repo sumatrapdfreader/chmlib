@@ -15,24 +15,7 @@
 
 #include "sha1.h"
 
-static uint8_t* extract_entry(struct chm_file* h, chm_entry* e) {
-    int64_t len = (int64_t)e->length;
-
-    uint8_t* buf = (uint8_t*)malloc((size_t)len + 1);
-    if (buf == NULL) {
-        return NULL;
-    }
-    buf[len] = 0; /* null-terminate just in case */
-
-    int64_t n = chm_retrieve_entry(h, e, buf, 0, len);
-    if (n != len) {
-        free(buf);
-        return NULL;
-    }
-    return buf;
-}
-
-/* return 1 if s contains ',' */
+/* return true if s contains ',' */
 static bool needs_csv_escaping(const char* s) {
     while (*s && (*s != ',')) {
         s++;
@@ -53,6 +36,23 @@ static void sha1_to_hex(uint8_t* sha1, char* sha1Hex) {
         n = c & 0xf;
         sha1Hex[(i * 2) + 1] = hex_char(n);
     }
+}
+
+static uint8_t* extract_entry(struct chm_file* h, chm_entry* e) {
+    int64_t len = (int64_t)e->length;
+
+    uint8_t* buf = (uint8_t*)malloc((size_t)len + 1);
+    if (buf == NULL) {
+        return NULL;
+    }
+    buf[len] = 0; /* null-terminate just in case */
+
+    int64_t n = chm_retrieve_entry(h, e, buf, 0, len);
+    if (n != len) {
+        free(buf);
+        return NULL;
+    }
+    return buf;
 }
 
 static bool process_entry(struct chm_file* h, chm_entry* e) {
