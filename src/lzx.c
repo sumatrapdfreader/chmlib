@@ -705,7 +705,7 @@ int lzx_decompress(struct lzx_state* pState, unsigned char* inpos, unsigned char
                                 } else if (extra > 0) { /* extra==1, extra==2 */
                                     /* verbatim bits only */
                                     READ_BITS(verbatim_bits, extra);
-                                    match_offset += verbatim_bits;
+                                    match_offset += (uint32_t)verbatim_bits;
                                 } else /* extra == 0 */ {
                                     /* ??? */
                                     match_offset = 1;
@@ -729,7 +729,7 @@ int lzx_decompress(struct lzx_state* pState, unsigned char* inpos, unsigned char
 
                             rundest = window + window_posn;
                             runsrc = rundest - match_offset;
-                            window_posn += match_length;
+                            window_posn += (uint32_t)match_length;
                             if (window_posn > window_size)
                                 return DECR_ILLEGALDATA;
                             this_run -= match_length;
@@ -751,7 +751,7 @@ int lzx_decompress(struct lzx_state* pState, unsigned char* inpos, unsigned char
                         return DECR_ILLEGALDATA;
                     memcpy(window + window_posn, inpos, (size_t)this_run);
                     inpos += this_run;
-                    window_posn += this_run;
+                    window_posn += (uint32_t)this_run;
                     break;
 
                 default:
