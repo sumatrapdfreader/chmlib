@@ -345,11 +345,10 @@ void lzx_reset(struct lzx_state* pState) {
  *
  * Returns 0 for OK or 1 for error
  */
-
 static int make_decode_table(uint32_t nsyms, uint32_t nbits, uint8_t* length, uint16_t* table) {
-    register uint16_t sym;
-    register uint32_t leaf;
-    register uint8_t bit_num = 1;
+    uint16_t sym;
+    uint32_t leaf;
+    uint8_t bit_num = 1;
     uint32_t fill;
     uint32_t pos = 0; /* the current position in the decode table */
     uint32_t table_mask = 1 << nbits;
@@ -435,8 +434,8 @@ static int lzx_read_lens(struct lzx_state* pState, uint8_t* lens, uint32_t first
     uint32_t i, j, x, y;
     int z;
 
-    register uint32_t bitbuf = lb->bb;
-    register int bitsleft = lb->bl;
+    uint32_t bitbuf = lb->bb;
+    int bitsleft = lb->bl;
     uint8_t* inpos = lb->ip;
     uint16_t* hufftbl;
 
@@ -494,8 +493,8 @@ int lzx_decompress(struct lzx_state* pState, unsigned char* inpos, unsigned char
     uint32_t R1 = pState->R1;
     uint32_t R2 = pState->R2;
 
-    register uint32_t bitbuf;
-    register int bitsleft;
+    uint32_t bitbuf;
+    int bitsleft;
     uint32_t match_offset, i, j, k; /* ijk used in READ_HUFFSYM macro */
     struct lzx_bits lb;             /* used in READ_LENGTHS macro */
 
