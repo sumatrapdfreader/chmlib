@@ -28,8 +28,10 @@ clang_rel_one()
 {
   echo "clang_rel_on"
   CC=clang
-  # ASAN only seems to work with -O0 (didn't trigger when I compiled with -O1, -O2 and -O3
-  CFLAGS="-g -fsanitize=address -O0 -Isrc -Weverything -Wno-format-nonliteral -Wno-padded -Wno-conversion"
+  # ASAN only seems to work with -O0 (intentionally inserted bug didn't trigger
+  # when I compiled with -O1, -O2 and -O3, but maybe it's because aggresive
+  # optimizations eliminated the code completely)
+  CFLAGS="-g -fsanitize=address -O0 -Isrc -Weverything -Wno-format-nonliteral -Wno-padded"
   OUT=obj/clang/rel
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c

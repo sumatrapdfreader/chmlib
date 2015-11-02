@@ -122,7 +122,7 @@ int64_t mem_reader(void* ctx_arg, void* buf, int64_t off, int64_t len) {
     }
     char* d = (char*)ctx->data;
     d += off;
-    memcpy(buf, d, len);
+    memcpy(buf, d, (size_t)len);
     return len;
 }
 
@@ -154,7 +154,7 @@ int64_t fd_reader(void* ctx_arg, void* buf, int64_t off, int64_t len) {
     }
     int64_t oldOff = lseek(ctx->fd, 0, SEEK_CUR);
     lseek(ctx->fd, (long)off, SEEK_SET);
-    int64_t n = read(ctx->fd, buf, len);
+    int64_t n = read(ctx->fd, buf, (size_t)len);
     lseek(ctx->fd, (long)oldOff, SEEK_SET);
     return n;
 }
@@ -297,12 +297,12 @@ static uint64_t get_uint64(unmarshaller* u) {
     return get_uint_n(u, (int)sizeof(uint64_t));
 }
 
-static uint64_t get_int64(unmarshaller* u) {
+static int64_t get_int64(unmarshaller* u) {
     return (int64_t)get_uint64(u);
 }
 
 static uint32_t get_uint32(unmarshaller* u) {
-    return get_uint_n(u, sizeof(uint32_t));
+    return (uint32_t)get_uint_n(u, sizeof(uint32_t));
 }
 
 static int32_t get_int32(unmarshaller* u) {
@@ -314,7 +314,7 @@ static void get_pchar(unmarshaller* u, char* dst, int n) {
     if (d == NULL) {
         return;
     }
-    memcpy(dst, (char*)d, n);
+    memcpy(dst, (char*)d, (size_t)n);
 }
 
 static void get_puchar(unmarshaller* u, uint8_t* dst, int n) {
@@ -322,7 +322,7 @@ static void get_puchar(unmarshaller* u, uint8_t* dst, int n) {
     if (d == NULL) {
         return;
     }
-    memcpy((char*)dst, (char*)d, n);
+    memcpy((char*)dst, (char*)d, (size_t)n);
 }
 
 static void get_uuid(unmarshaller* u, uint8_t* dst) {
@@ -355,10 +355,10 @@ static bool unmarshal_itsf_header(unmarshaller* u, itsf_hdr* hdr) {
     hdr->lang_id = get_uint32(u);
     get_uuid(u, hdr->dir_uuid);
     get_uuid(u, hdr->stream_uuid);
-    hdr->unknown_offset = get_uint64(u);
-    hdr->unknown_len = get_uint64(u);
-    hdr->dir_offset = get_uint64(u);
-    hdr->dir_len = get_uint64(u);
+    hdr->unknown_offset = get_int64(u);
+    hdr->unknown_len = get_int64(u);
+    hdr->dir_offset = get_int64(u);
+    hdr->dir_len = get_int64(u);
 
     int ver = hdr->version;
     if (!(ver == 2 || ver == 3)) {
@@ -367,7 +367,7 @@ static bool unmarshal_itsf_header(unmarshaller* u, itsf_hdr* hdr) {
     }
 
     if (ver == 3) {
-        hdr->data_offset = get_uint64(u);
+        hdr->data_offset = get_int64(u);
     } else {
         hdr->data_offset = hdr->dir_offset + hdr->dir_len;
     }
@@ -531,7 +531,7 @@ static bool parse_lzxc_control_data(chm_file* h, chm_entry* e, int64_t n,
         return false;
     }
     unmarshaller u;
-    unmarshaller_init(&u, buf, n);
+    unmarshaller_init(&u, buf, (int)n);
     return unmarshal_lzxc_control_data(&u, ctl_data);
 }
 
@@ -623,7 +623,7 @@ static uint8_t* get_cached_block(chm_file* h, int64_t nBlock) {
 static uint8_t* alloc_cached_block(chm_file* h, int64_t nBlock) {
     int idx = (int)(nBlock % h->n_cache_blocks);
     if (!h->cache_blocks[idx]) {
-        size_t blockSize = h->reset_table.block_len;
+        size_t blockSize = (size_t)h->reset_table.block_len;
         h->cache_blocks[idx] = (uint8_t*)malloc(blockSize);
     }
     if (h->cache_blocks[idx]) {
