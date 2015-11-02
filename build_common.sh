@@ -12,6 +12,7 @@ CHM_SRCS="src/chm_lib.c src/lzx.c"
 
 clang_rel()
 {
+  echo "clang_rel"
   CC=clang
   # ASAN only seems to work with -O0 (didn't trigger when I compiled with -O1, -O2 and -O3
   CFLAGS="-g -fsanitize=address -O0 -Isrc -Weverything -Wno-format-nonliteral -Wno-padded -Wno-conversion"
@@ -25,17 +26,19 @@ clang_rel()
 
 clang_rel_one()
 {
+  echo "clang_rel_on"
   CC=clang
   # ASAN only seems to work with -O0 (didn't trigger when I compiled with -O1, -O2 and -O3
   CFLAGS="-g -fsanitize=address -O0 -Isrc -Weverything -Wno-format-nonliteral -Wno-padded -Wno-conversion"
   OUT=obj/clang/rel
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
-  $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
+  #$CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
 
 clang_dbg()
 {
+  echo "clang_dbg"
   CC=clang
   CFLAGS="-g -fsanitize=address -O0 -Isrc -Weverything -Wno-format-nonliteral -Wno-padded -Wno-conversion"
   OUT=obj/clang/dbg
@@ -48,10 +51,11 @@ clang_dbg()
 
 gcc_rel()
 {
+  echo "gcc_rel"
   #CC=/usr/local/opt/gcc/bin/gcc-5
   CC=gcc-5 # this is on mac when installed with brew install gcc
-  CFLAGS="-g -O3 -Isrc -Wall"
-  OUT=obj/clang/rel
+  CFLAGS="-g -O3 -Isrc -Wall -Wextra -Wpedantic"
+  OUT=obj/gcc/rel
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
   $CC -o $OUT/extract $CFLAGS $CHM_SRCS tools/extract.c
