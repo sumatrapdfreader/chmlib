@@ -564,7 +564,7 @@ void chm_close(chm_file* h) {
     if (h->lzx_state)
         lzx_teardown(h->lzx_state);
 
-    for (int i = 0; i < h->cache_num_blocks; i++) {
+    for (int i = 0; i < h->n_cache_blocks; i++) {
         free(h->cache_blocks[i]);
     }
     if (h->entries != NULL) {
@@ -582,7 +582,7 @@ void chm_close(chm_file* h) {
  *  invalidation of the previously cached block.
  */
 void chm_set_cache_size(chm_file* h, int nCacheBlocks) {
-    if (nCacheBlocks == h->cache_num_blocks) {
+    if (nCacheBlocks == h->n_cache_blocks) {
         return;
     }
     if (nCacheBlocks > MAX_CACHE_BLOCKS) {
@@ -592,7 +592,7 @@ void chm_set_cache_size(chm_file* h, int nCacheBlocks) {
     int64_t newIndices[MAX_CACHE_BLOCKS] = {0};
 
     /* re-distribute old cached blocks */
-    for (int i = 0; i < h->cache_num_blocks; i++) {
+    for (int i = 0; i < h->n_cache_blocks; i++) {
         int newSlot = (int)(h->cache_block_indices[i] % nCacheBlocks);
 
         if (h->cache_blocks[i]) {
@@ -609,11 +609,11 @@ void chm_set_cache_size(chm_file* h, int nCacheBlocks) {
 
     memcpy(h->cache_blocks, newBlocks, sizeof(newBlocks));
     memcpy(h->cache_block_indices, newIndices, sizeof(newIndices));
-    h->cache_num_blocks = nCacheBlocks;
+    h->n_cache_blocks = nCacheBlocks;
 }
 
 static uint8_t* get_cached_block(chm_file* h, int64_t nBlock) {
-    int idx = (int)nBlock % h->cache_num_blocks;
+    int idx = (int)nBlock % h->n_cache_blocks;
     if (h->cache_blocks[idx] != NULL && h->cache_block_indices[idx] == nBlock) {
         return h->cache_blocks[idx];
     }
@@ -621,7 +621,7 @@ static uint8_t* get_cached_block(chm_file* h, int64_t nBlock) {
 }
 
 static uint8_t* alloc_cached_block(chm_file* h, int64_t nBlock) {
-    int idx = (int)(nBlock % h->cache_num_blocks);
+    int idx = (int)(nBlock % h->n_cache_blocks);
     if (!h->cache_blocks[idx]) {
         size_t blockSize = h->reset_table.block_len;
         h->cache_blocks[idx] = (uint8_t*)malloc(blockSize);

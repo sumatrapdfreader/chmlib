@@ -58,7 +58,7 @@ static void usage(const char* argv0) {
 static int chmhttp_server(const char* path);
 
 int main(int c, char** v) {
-  int res;
+    int res;
 #ifdef CHM_HTTP_SIMPLE
     if (c < 2) {
         usage(v[0]);
@@ -141,7 +141,7 @@ static int chmhttp_server(const char* path) {
     }
     bool ok = chm_parse(&server.file, fd_reader, &ctx);
     if (!ok) {
-      fprintf(stderr, "couldn't open file '%s'\n", path);
+        fprintf(stderr, "couldn't open file '%s'\n", path);
         fd_reader_close(&ctx);
         return 2;
     }
@@ -238,7 +238,7 @@ static const char* lookup_mime(const char* ext) {
     return "application/octet-stream";
 }
 
-static void print_entry_index(FILE *fout, chm_entry* e) {
+static void print_entry_index(FILE* fout, chm_entry* e) {
     fprintf(fout,
             "<tr>"
             "<td align=right>%8d\n</td>"
@@ -259,7 +259,7 @@ static void deliver_index(FILE* fout, struct chm_file* file) {
             "<tr><td><h5>Size:</h5></td><td><h5>File:</h5></td></tr>"
             "<tt>");
     for (int i = 0; i < file->n_entries; i++) {
-          print_entry_index(fout, file->entries[i]);
+        print_entry_index(fout, file->entries[i]);
     }
 
     fprintf(fout, "</tt> </table></body></html>");
@@ -269,19 +269,19 @@ static int streq(const char* s1, const char* s2) {
     return strcasecmp(s1, s2) == 0;
 }
 
-static chm_entry *find_entry_by_path(chm_file *f, const char *path) {
-  chm_entry *e;
-  for (int i = 0; i < f->n_entries; i++) {
-    e = f->entries[i];
-    if (streq(e->path, path)) {
-      return e;
+static chm_entry* find_entry_by_path(chm_file* f, const char* path) {
+    chm_entry* e;
+    for (int i = 0; i < f->n_entries; i++) {
+        e = f->entries[i];
+        if (streq(e->path, path)) {
+            return e;
+        }
     }
-  }
-  return NULL;
+    return NULL;
 }
 
 static void deliver_content(FILE* fout, const char* path, struct chm_file* file) {
-    chm_entry *e;
+    chm_entry* e;
     const char* ext;
     unsigned char buffer[65536];
     int swath, offset;
@@ -294,9 +294,9 @@ static void deliver_content(FILE* fout, const char* path, struct chm_file* file)
 
     e = find_entry_by_path(file, path);
     if (e == NULL) {
-      fprintf(fout, CONTENT_404);
-      fclose(fout);
-      return;
+        fprintf(fout, CONTENT_404);
+        fclose(fout);
+        return;
     }
 
     /* send the file back */

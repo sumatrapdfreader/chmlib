@@ -180,7 +180,7 @@ typedef struct chm_file {
     /* cache for decompressed blocks */
     uint8_t* cache_blocks[MAX_CACHE_BLOCKS];
     int64_t cache_block_indices[MAX_CACHE_BLOCKS];
-    int cache_num_blocks;
+    int n_cache_blocks;
 
     chm_entry** entries;
     int n_entries;

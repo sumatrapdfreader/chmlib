@@ -62,7 +62,7 @@ static bool enum_fd(const char* path) {
         return false;
     }
     for (int i = 0; i < f.n_entries; i++) {
-          print_entry(f.entries[i]);
+        print_entry(f.entries[i]);
     }
     if (f.parse_entries_failed) {
         return false;
@@ -74,7 +74,7 @@ static bool enum_fd(const char* path) {
 
 int main(int c, char** v) {
     for (int i = 1; i < c; i++) {
-      const char *path = v[i];
+        const char* path = v[i];
 
         printf("%s:\n", path);
         printf(" spc    start   length   type\t\t\tname\n");
