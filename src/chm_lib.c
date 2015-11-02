@@ -288,13 +288,13 @@ static uint64_t get_uint_n(unmarshaller* u, size_t nBytesNeeded) {
     uint64_t res = 0;
     for (size_t i = 0; i < nBytesNeeded; i++) {
         res <<= 8;
-        res |= d[nBytesNeeded-i-1];
+        res |= d[nBytesNeeded - i - 1];
     }
     return res;
 }
 
 static int64_t get_int64(unmarshaller* u) {
-  return (int64_t)get_uint_n(u, sizeof(uint64_t));
+    return (int64_t)get_uint_n(u, sizeof(uint64_t));
 }
 
 static uint32_t get_uint32(unmarshaller* u) {

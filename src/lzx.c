@@ -32,12 +32,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-/* sized types */
-typedef unsigned char UBYTE;  /* 8 bits exactly    */
-typedef unsigned short UWORD; /* 16 bits (or more) */
-typedef unsigned int ULONG;   /* 32 bits (or more) */
-typedef signed int LONG;      /* 32 bits (or more) */
+#include <stdint.h>
 
 /* some constants defined by the LZX specification */
 #define LZX_MIN_MATCH 2
@@ -64,25 +59,25 @@ typedef signed int LONG;      /* 32 bits (or more) */
 
 #define LZX_LENTABLE_SAFETY 64 /* we allow length table decoding overruns */
 
-#define LZX_DECLARE_TABLE(tbl)                                                       \
-    UWORD tbl##_table[(1 << LZX_##tbl##_TABLEBITS) + (LZX_##tbl##_MAXSYMBOLS << 1)]; \
-    UBYTE tbl##_len[LZX_##tbl##_MAXSYMBOLS + LZX_LENTABLE_SAFETY]
+#define LZX_DECLARE_TABLE(tbl)                                                          \
+    uint16_t tbl##_table[(1 << LZX_##tbl##_TABLEBITS) + (LZX_##tbl##_MAXSYMBOLS << 1)]; \
+    uint8_t tbl##_len[LZX_##tbl##_MAXSYMBOLS + LZX_LENTABLE_SAFETY]
 
 struct lzx_state {
-    UBYTE* window;         /* the actual decoding window              */
-    ULONG window_size;     /* window size (32Kb through 2Mb)          */
-    ULONG actual_size;     /* window size when it was first allocated */
-    ULONG window_posn;     /* current offset within the window        */
-    ULONG R0, R1, R2;      /* for the LRU offset system               */
-    UWORD main_elements;   /* number of main tree elements            */
-    int header_read;       /* have we started decoding at all yet?    */
-    UWORD block_type;      /* type of this block                      */
-    ULONG block_length;    /* uncompressed length of this block       */
-    ULONG block_remaining; /* uncompressed bytes still left to decode */
-    ULONG frames_read;     /* the number of CFDATA blocks processed   */
-    LONG intel_filesize;   /* magic header value used for transform   */
-    LONG intel_curpos;     /* current offset in transform space       */
-    int intel_started;     /* have we seen any translatable data yet? */
+    uint8_t* window;          /* the actual decoding window              */
+    uint32_t window_size;     /* window size (32Kb through 2Mb)          */
+    uint32_t actual_size;     /* window size when it was first allocated */
+    uint32_t window_posn;     /* current offset within the window        */
+    uint32_t R0, R1, R2;      /* for the LRU offset system               */
+    uint16_t main_elements;   /* number of main tree elements            */
+    int header_read;          /* have we started decoding at all yet?    */
+    uint16_t block_type;      /* type of this block                      */
+    uint32_t block_length;    /* uncompressed length of this block       */
+    uint32_t block_remaining; /* uncompressed bytes still left to decode */
+    uint32_t frames_read;     /* the number of CFDATA blocks processed   */
+    int32_t intel_filesize;   /* magic header value used for transform   */
+    int32_t intel_curpos;     /* current offset in transform space       */
+    int intel_started;        /* have we seen any translatable data yet? */
 
     LZX_DECLARE_TABLE(PRETREE);
     LZX_DECLARE_TABLE(MAINTREE);
@@ -144,12 +139,12 @@ struct lzx_state {
  * - position_base is an index to the position slot bases
  * - extra_bits states how many bits of offset-from-base data is needed.
  */
-static const UBYTE extra_bits[51] = {0,  0,  0,  0,  1,  1,  2,  2,  3,  3,  4,  4,  5,
-                                     5,  6,  6,  7,  7,  8,  8,  9,  9,  10, 10, 11, 11,
-                                     12, 12, 13, 13, 14, 14, 15, 15, 16, 16, 17, 17, 17,
-                                     17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17};
+static const uint8_t extra_bits[51] = {0,  0,  0,  0,  1,  1,  2,  2,  3,  3,  4,  4,  5,
+                                       5,  6,  6,  7,  7,  8,  8,  9,  9,  10, 10, 11, 11,
+                                       12, 12, 13, 13, 14, 14, 15, 15, 16, 16, 17, 17, 17,
+                                       17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17};
 
-static const ULONG position_base[51] = {
+static const uint32_t position_base[51] = {
     0,       1,       2,       3,       4,       6,       8,      12,     16,     24,      32,
     48,      64,      96,      128,     192,     256,     384,    512,    768,    1024,    1536,
     2048,    3072,    4096,    6144,    8192,    12288,   16384,  24576,  32768,  49152,   65536,
@@ -158,7 +153,7 @@ static const ULONG position_base[51] = {
 
 struct lzx_state* lzx_init(int window) {
     struct lzx_state* pState = NULL;
-    ULONG wndsize = 1 << window;
+    uint32_t wndsize = 1 << window;
     int i, posn_slots;
 
     /* LZX supports window sizes of 2^15 (32Kb) through 2^21 (2Mb) */
@@ -168,7 +163,7 @@ struct lzx_state* lzx_init(int window) {
 
     /* allocate state and associated window */
     pState = (struct lzx_state*)malloc(sizeof(struct lzx_state));
-    if (!pState || !(pState->window = (UBYTE*)malloc(wndsize))) {
+    if (!pState || !(pState->window = (uint8_t*)malloc(wndsize))) {
         free(pState);
         return NULL;
     }
@@ -247,16 +242,16 @@ void lzx_reset(struct lzx_state* pState) {
  * These bit access routines work by using the area beyond the MSB and the
  * LSB as a free source of zeroes. This avoids having to mask any bits.
  * So we have to know the bit width of the bitbuffer variable. This is
- * sizeof(ULONG) * 8, also defined as ULONG_BITS
+ * sizeof(uint32_t) * 8, also defined as uint32_t_BITS
  */
 
-/* number of bits in ULONG. Note: This must be at multiple of 16, and at
+/* number of bits in uint32_t. Note: This must be at multiple of 16, and at
  * least 32 for the bitbuffer code to work (ie, it must be able to ensure
  * up to 17 bits - that's adding 16 bits when there's one bit left, or
  * adding 32 bits when there are no bits left. The code should work fine
- * for machines where ULONG >= 32 bits.
+ * for machines where uint32_t >= 32 bits.
  */
-#define ULONG_BITS (sizeof(ULONG) << 3)
+#define uint32_t_BITS (sizeof(uint32_t) << 3)
 
 #define INIT_BITSTREAM \
     do {               \
@@ -264,14 +259,14 @@ void lzx_reset(struct lzx_state* pState) {
         bitbuf = 0;    \
     } while (0)
 
-#define ENSURE_BITS(n)                                                          \
-    while (bitsleft < (n)) {                                                    \
-        bitbuf |= ((inpos[1] << 8) | inpos[0]) << (ULONG_BITS - 16 - bitsleft); \
-        bitsleft += 16;                                                         \
-        inpos += 2;                                                             \
+#define ENSURE_BITS(n)                                                             \
+    while (bitsleft < (n)) {                                                       \
+        bitbuf |= ((inpos[1] << 8) | inpos[0]) << (uint32_t_BITS - 16 - bitsleft); \
+        bitsleft += 16;                                                            \
+        inpos += 2;                                                                \
     }
 
-#define PEEK_BITS(n) (bitbuf >> (ULONG_BITS - (n)))
+#define PEEK_BITS(n) (bitbuf >> (uint32_t_BITS - (n)))
 #define REMOVE_BITS(n) ((bitbuf <<= (n)), (bitsleft -= (n)))
 
 #define READ_BITS(v, n)     \
@@ -306,7 +301,7 @@ void lzx_reset(struct lzx_state* pState) {
         ENSURE_BITS(16);                                                   \
         hufftbl = SYMTABLE(tbl);                                           \
         if ((i = hufftbl[PEEK_BITS(TABLEBITS(tbl))]) >= MAXSYMBOLS(tbl)) { \
-            j = 1 << (ULONG_BITS - TABLEBITS(tbl));                        \
+            j = 1 << (uint32_t_BITS - TABLEBITS(tbl));                     \
             do {                                                           \
                 j >>= 1;                                                   \
                 i <<= 1;                                                   \
@@ -351,15 +346,15 @@ void lzx_reset(struct lzx_state* pState) {
  * Returns 0 for OK or 1 for error
  */
 
-static int make_decode_table(ULONG nsyms, ULONG nbits, UBYTE* length, UWORD* table) {
-    register UWORD sym;
-    register ULONG leaf;
-    register UBYTE bit_num = 1;
-    ULONG fill;
-    ULONG pos = 0; /* the current position in the decode table */
-    ULONG table_mask = 1 << nbits;
-    ULONG bit_mask = table_mask >> 1; /* don't do 0 length codes */
-    ULONG next_symbol = bit_mask;     /* base of allocation for long codes */
+static int make_decode_table(uint32_t nsyms, uint32_t nbits, uint8_t* length, uint16_t* table) {
+    register uint16_t sym;
+    register uint32_t leaf;
+    register uint8_t bit_num = 1;
+    uint32_t fill;
+    uint32_t pos = 0; /* the current position in the decode table */
+    uint32_t table_mask = 1 << nbits;
+    uint32_t bit_mask = table_mask >> 1; /* don't do 0 length codes */
+    uint32_t next_symbol = bit_mask;     /* base of allocation for long codes */
 
     /* fill entries for codes short enough for a direct mapping */
     while (bit_num <= nbits) {
@@ -430,20 +425,20 @@ static int make_decode_table(ULONG nsyms, ULONG nbits, UBYTE* length, UWORD* tab
 }
 
 struct lzx_bits {
-    ULONG bb;
+    uint32_t bb;
     int bl;
-    UBYTE* ip;
+    uint8_t* ip;
 };
 
-static int lzx_read_lens(struct lzx_state* pState, UBYTE* lens, ULONG first, ULONG last,
+static int lzx_read_lens(struct lzx_state* pState, uint8_t* lens, uint32_t first, uint32_t last,
                          struct lzx_bits* lb) {
-    ULONG i, j, x, y;
+    uint32_t i, j, x, y;
     int z;
 
-    register ULONG bitbuf = lb->bb;
+    register uint32_t bitbuf = lb->bb;
     register int bitsleft = lb->bl;
-    UBYTE* inpos = lb->ip;
-    UWORD* hufftbl;
+    uint8_t* inpos = lb->ip;
+    uint16_t* hufftbl;
 
     for (x = 0; x < 20; x++) {
         READ_BITS(y, 4);
@@ -488,21 +483,21 @@ static int lzx_read_lens(struct lzx_state* pState, UBYTE* lens, ULONG first, ULO
 
 int lzx_decompress(struct lzx_state* pState, unsigned char* inpos, unsigned char* outpos, int inlen,
                    int outlen) {
-    UBYTE* endinp = inpos + inlen;
-    UBYTE* window = pState->window;
-    UBYTE* runsrc, *rundest;
-    UWORD* hufftbl; /* used in READ_HUFFSYM macro as chosen decoding table */
+    uint8_t* endinp = inpos + inlen;
+    uint8_t* window = pState->window;
+    uint8_t* runsrc, *rundest;
+    uint16_t* hufftbl; /* used in READ_HUFFSYM macro as chosen decoding table */
 
-    ULONG window_posn = pState->window_posn;
-    ULONG window_size = pState->window_size;
-    ULONG R0 = pState->R0;
-    ULONG R1 = pState->R1;
-    ULONG R2 = pState->R2;
+    uint32_t window_posn = pState->window_posn;
+    uint32_t window_size = pState->window_size;
+    uint32_t R0 = pState->R0;
+    uint32_t R1 = pState->R1;
+    uint32_t R2 = pState->R2;
 
-    register ULONG bitbuf;
+    register uint32_t bitbuf;
     register int bitsleft;
-    ULONG match_offset, i, j, k; /* ijk used in READ_HUFFSYM macro */
-    struct lzx_bits lb;          /* used in READ_LENGTHS macro */
+    uint32_t match_offset, i, j, k; /* ijk used in READ_HUFFSYM macro */
+    struct lzx_bits lb;             /* used in READ_LENGTHS macro */
 
     int togo = outlen, this_run, main_element, aligned_bits;
     int match_length, length_footer, extra, verbatim_bits;
@@ -775,11 +770,11 @@ int lzx_decompress(struct lzx_state* pState, unsigned char* inpos, unsigned char
         if (outlen <= 6 || !pState->intel_started) {
             pState->intel_curpos += outlen;
         } else {
-            UBYTE* data = outpos;
-            UBYTE* dataend = data + outlen - 10;
-            LONG curpos = pState->intel_curpos;
-            LONG filesize = pState->intel_filesize;
-            LONG abs_off, rel_off;
+            uint8_t* data = outpos;
+            uint8_t* dataend = data + outlen - 10;
+            int32_t curpos = pState->intel_curpos;
+            int32_t filesize = pState->intel_filesize;
+            int32_t abs_off, rel_off;
 
             pState->intel_curpos = curpos + outlen;
 
@@ -791,10 +786,10 @@ int lzx_decompress(struct lzx_state* pState, unsigned char* inpos, unsigned char
                 abs_off = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
                 if ((abs_off >= -curpos) && (abs_off < filesize)) {
                     rel_off = (abs_off >= 0) ? abs_off - curpos : abs_off + filesize;
-                    data[0] = (UBYTE)rel_off;
-                    data[1] = (UBYTE)(rel_off >> 8);
-                    data[2] = (UBYTE)(rel_off >> 16);
-                    data[3] = (UBYTE)(rel_off >> 24);
+                    data[0] = (uint8_t)rel_off;
+                    data[1] = (uint8_t)(rel_off >> 8);
+                    data[2] = (uint8_t)(rel_off >> 16);
+                    data[3] = (uint8_t)(rel_off >> 24);
                 }
                 data += 4;
                 curpos += 5;
@@ -808,8 +803,8 @@ int lzx_decompress(struct lzx_state* pState, unsigned char* inpos, unsigned char
 int main(int c, char** v) {
     FILE* fin, *fout;
     struct lzx_state state;
-    UBYTE ibuf[16384];
-    UBYTE obuf[32768];
+    uint8_t ibuf[16384];
+    uint8_t obuf[32768];
     int ilen, olen;
     int status;
     int i;
