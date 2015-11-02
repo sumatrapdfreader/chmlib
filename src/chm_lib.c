@@ -280,25 +280,21 @@ static uint8_t* eat_bytes(unmarshaller* u, int n) {
     return res;
 }
 
-static uint64_t get_uint_n(unmarshaller* u, int nBytesNeeded) {
-    uint8_t* d = eat_bytes(u, nBytesNeeded);
+static uint64_t get_uint_n(unmarshaller* u, size_t nBytesNeeded) {
+    uint8_t* d = eat_bytes(u, (int)nBytesNeeded);
     if (d == NULL) {
         return 0;
     }
     uint64_t res = 0;
-    for (int i = nBytesNeeded - 1; i >= 0; i--) {
+    for (size_t i = 0; i < nBytesNeeded; i++) {
         res <<= 8;
-        res |= d[i];
+        res |= d[nBytesNeeded-i-1];
     }
     return res;
 }
 
-static uint64_t get_uint64(unmarshaller* u) {
-    return get_uint_n(u, (int)sizeof(uint64_t));
-}
-
 static int64_t get_int64(unmarshaller* u) {
-    return (int64_t)get_uint64(u);
+  return (int64_t)get_uint_n(u, sizeof(uint64_t));
 }
 
 static uint32_t get_uint32(unmarshaller* u) {
@@ -680,7 +676,7 @@ static bool get_int64_at_off(chm_file* h, int64_t off, int64_t* n_out) {
     }
     unmarshaller u;
     unmarshaller_init(&u, buf, 8);
-    uint64_t n = get_int64(&u);
+    int64_t n = get_int64(&u);
     if (!u.ok) {
         return false;
     }
@@ -711,7 +707,7 @@ static bool get_cmpblock_bounds(chm_file* h, int64_t block, int64_t* start, int6
 }
 
 static uint8_t* uncompress_block(chm_file* h, int64_t nBlock) {
-    size_t blockSize = h->reset_table.block_len;
+    size_t blockSize = (size_t)h->reset_table.block_len;
     // TODO: cache buf on chm_file
 
     if (h->lzx_last_block == nBlock) {
@@ -750,7 +746,7 @@ static uint8_t* uncompress_block(chm_file* h, int64_t nBlock) {
         goto Error;
     }
 
-    h->lzx_last_block = nBlock;
+    h->lzx_last_block = (int)nBlock;
     h->lzx_last_block_data = uncompressed;
     free(buf);
     return uncompressed;
@@ -764,7 +760,7 @@ static int64_t decompress_block(chm_file* h, int64_t nBlock, uint8_t** ubuffer) 
 
     /* let the caching system pull its weight! */
     if (nBlock - blockAlign <= h->lzx_last_block && nBlock >= h->lzx_last_block)
-        blockAlign = ((uint32_t)nBlock - h->lzx_last_block);
+        blockAlign = (uint32_t)(nBlock - h->lzx_last_block);
 
     /* check if we need previous blocks */
     if (blockAlign != 0) {
@@ -808,7 +804,7 @@ static int64_t decompress_region(chm_file* h, uint8_t* buf, int64_t start, int64
     }
 
     if (!h->lzx_state) {
-        int window_size = ffs(h->window_size) - 1;
+        int window_size = ffs((int)h->window_size) - 1;
         h->lzx_last_block = -1;
         h->lzx_state = lzx_init(window_size);
     }
@@ -887,7 +883,7 @@ static bool parse_entries(chm_file* h) {
         }
 
         unmarshaller u;
-        unmarshaller_init(&u, buf, n);
+        unmarshaller_init(&u, buf, (int)n);
         if (!unmarshal_pmgl_header(&u, h->itsp.block_len, &pgml)) {
             goto Error;
         }
@@ -912,7 +908,7 @@ static bool parse_entries(chm_file* h) {
 Exit:
     if (n_entries > 0) {
         h->n_entries = n_entries;
-        chm_entry** entries = (chm_entry**)calloc(n_entries, sizeof(chm_entry*));
+        chm_entry** entries = (chm_entry**)calloc((size_t)n_entries, sizeof(chm_entry*));
         if (entries != NULL) {
             h->entries = entries;
             e = last_entry;
@@ -946,7 +942,7 @@ static bool parse_lzxc_reset_table(chm_file* h) {
         return false;
     }
     unmarshaller u;
-    unmarshaller_init(&u, buf, n);
+    unmarshaller_init(&u, buf, (int)n);
     if (!unmarshal_lzxc_reset_table(&u, &h->reset_table)) {
         h->compression_enabled = false;
         return false;
@@ -956,7 +952,6 @@ static bool parse_lzxc_reset_table(chm_file* h) {
 
 bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
     unsigned char buf[256];
-    unsigned int n;
     chm_entry* lzxc = NULL;
     unmarshaller u;
 
@@ -965,12 +960,12 @@ bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
     h->read_ctx = read_ctx;
 
     /* read and verify header */
-    n = CHM_ITSF_V3_LEN;
+    int64_t n = CHM_ITSF_V3_LEN;
     if (read_bytes(h, buf, 0, n) != n) {
         goto Error;
     }
 
-    unmarshaller_init(&u, (uint8_t*)buf, n);
+    unmarshaller_init(&u, (uint8_t*)buf, (int)n);
     if (!unmarshal_itsf_header(&u, &h->itsf)) {
         dbgprintf("unmarshal_itsf_header() failed\n");
         goto Error;
@@ -980,7 +975,7 @@ bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
     if (read_func(read_ctx, buf, (int64_t)h->itsf.dir_offset, n) != n) {
         goto Error;
     }
-    unmarshaller_init(&u, (uint8_t*)buf, n);
+    unmarshaller_init(&u, (uint8_t*)buf, (int)n);
     if (!unmarshal_itsp_header(&u, &h->itsp)) {
         goto Error;
     }
