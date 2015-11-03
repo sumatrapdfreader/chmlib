@@ -27,6 +27,19 @@ clang_rel()
   $CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
 }
 
+build_afl()
+{
+  echo "build_afl"
+  CC=afl-clang
+  CFLAGS="-g -fsanitize=address -O0 -Isrc -Weverything -Wno-format-nonliteral -Wno-padded -Wno-conversion"
+  OUT=obj/afl/rel
+  mkdir -p $OUT
+  $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
+  #$CC -o $OUT/extract $CFLAGS $CHM_SRCS tools/extract.c
+  #$CC -o $OUT/enum $CFLAGS $CHM_SRCS tools/enum.c
+  #$CC -o $OUT/chm_http $CFLAGS $CHM_SRCS tools/chm_http.c
+}
+
 clang_rel_one()
 {
   echo "clang_rel_on"
