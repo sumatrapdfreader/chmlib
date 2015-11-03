@@ -31,7 +31,7 @@ build_afl()
 {
   echo "build_afl"
   CC=afl-clang
-  CFLAGS="-g -fsanitize=address -O0 -Isrc -Weverything -Wno-format-nonliteral -Wno-padded -Wno-conversion"
+  CFLAGS="-g -fsanitize=address -O3 -Isrc -Weverything -Wno-format-nonliteral -Wno-padded -Wno-conversion"
   OUT=obj/afl/rel
   mkdir -p $OUT
   $CC -o $OUT/test $CFLAGS $CHM_SRCS tools/test.c tools/sha1.c
