@@ -1,2 +1,3 @@
 obj/
 *.bz2
+afl_findings_dir/
