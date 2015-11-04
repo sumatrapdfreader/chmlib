@@ -54,6 +54,11 @@ var (
 		"/Volumes/Store/books/_chm/Linux Unwired (2004).chm",
 		"/Volumes/Store/tmp/HD1TB/books/chm/XML A Manager's Guide 2nd Edition.chm",
 	}
+	// TODO: use those files to test we don't crash anymore
+	pastCrashers = []string{
+		"https://www.dropbox.com/s/ubch71i1hmnlr0t/crash1.chm?dl=0",
+		"651379a64c778774354456ff12a3bdd6c0e2536e",
+	}
 )
 
 // White-listed changes:

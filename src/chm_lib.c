@@ -1027,6 +1027,10 @@ bool chm_parse(chm_file* h, chm_reader read_func, void* read_ctx) {
             h->window_size = ctl_data.windowSize;
             h->reset_interval = ctl_data.resetInterval;
             h->reset_blkcount = h->reset_interval / (h->window_size / 2) * ctl_data.windowsPerReset;
+            /* causes crash in file 651379a64c778774354456ff12a3bdd6c0e2536e */
+            if (h->reset_blkcount == 0) {
+              h->compression_enabled = false;
+            }
         }
     }
     chm_set_cache_size(h, CHM_MAX_BLOCKS_CACHED);
