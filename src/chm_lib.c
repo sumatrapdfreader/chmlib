@@ -94,7 +94,7 @@
         EnterCriticalSection(&(a));                     \
     } while(0)
 #define CHM_RELEASE_LOCK(a) do {                        \
-        EnterCriticalSection(&(a));                     \
+        LeaveCriticalSection(&(a));                     \
     } while(0)
 
 #else
@@ -412,6 +412,10 @@ static int _unmarshal_itsf_header(unsigned char **pData,
     else
         dest->data_offset = dest->dir_offset + dest->dir_len;
 
+    /* SumatraPDF: sanity check (huge values are usually due to broken files) */
+    if (dest->dir_offset > UINT_MAX || dest->dir_len > UINT_MAX)
+        return 0;
+
     return 1;
 }
 
@@ -468,6 +472,9 @@ static int _unmarshal_itsp_header(unsigned char **pData,
         return 0;
     if (dest->header_len != _CHM_ITSP_V1_LEN)
         return 0;
+    /* SumatraPDF: sanity check */
+    if (dest->block_len == 0)
+        return 0;
 
     return 1;
 }
@@ -486,10 +493,14 @@ struct chmPmglHeader
 
 static int _unmarshal_pmgl_header(unsigned char **pData,
                                   unsigned int *pDataLen,
+                                  unsigned int blockLen,
                                   struct chmPmglHeader *dest)
 {
     /* we only know how to deal with a 0x14 byte structures */
     if (*pDataLen != _CHM_PMGL_LEN)
+        return 0;
+    /* SumatraPDF: sanity check */
+    if (blockLen < _CHM_PMGL_LEN)
         return 0;
 
     /* unmarshal fields */
@@ -501,6 +512,9 @@ static int _unmarshal_pmgl_header(unsigned char **pData,
 
     /* check structure */
     if (memcmp(dest->signature, _chm_pmgl_marker, 4) != 0)
+        return 0;
+    /* SumatraPDF: sanity check */
+    if (dest->free_space > blockLen - _CHM_PMGL_LEN)
         return 0;
 
     return 1;
@@ -517,10 +531,14 @@ struct chmPmgiHeader
 
 static int _unmarshal_pmgi_header(unsigned char **pData,
                                   unsigned int *pDataLen,
+                                  unsigned int blockLen,
                                   struct chmPmgiHeader *dest)
 {
     /* we only know how to deal with a 0x8 byte structures */
     if (*pDataLen != _CHM_PMGI_LEN)
+        return 0;
+    /* SumatraPDF: sanity check */
+    if (blockLen < _CHM_PMGI_LEN)
         return 0;
 
     /* unmarshal fields */
@@ -529,6 +547,9 @@ static int _unmarshal_pmgi_header(unsigned char **pData,
 
     /* check structure */
     if (memcmp(dest->signature, _chm_pmgi_marker, 4) != 0)
+        return 0;
+    /* SumatraPDF: sanity check */
+    if (dest->free_space > blockLen - _CHM_PMGI_LEN)
         return 0;
 
     return 1;
@@ -566,6 +587,11 @@ static int _unmarshal_lzxc_reset_table(unsigned char **pData,
 
     /* check structure */
     if (dest->version != 2)
+        return 0;
+    /* SumatraPDF: sanity check (huge values are usually due to broken files) */
+    if (dest->uncompressed_len > UINT_MAX || dest->compressed_len > UINT_MAX)
+        return 0;
+    if (dest->block_len == 0 || dest->block_len > UINT_MAX)
         return 0;
 
     return 1;
@@ -938,6 +964,8 @@ struct chmFile *chm_open(const char *filename)
         {
             newHandle->compression_enabled = 0;
         }
+        else /* SumatraPDF: prevent division by zero */
+        {
 
         newHandle->window_size = ctlData.windowSize;
         newHandle->reset_interval = ctlData.resetInterval;
@@ -953,6 +981,7 @@ struct chmFile *chm_open(const char *filename)
                                     (newHandle->window_size / 2) *
                                     ctlData.windowsPerReset;
 #endif
+        }
     }
 
     /* initialize cache */
@@ -1174,7 +1203,7 @@ static UChar *_chm_find_in_PMGL(UChar *page_buf,
     /* figure out where to start and end */
     cur = page_buf;
     hremain = _CHM_PMGL_LEN;
-    if (! _unmarshal_pmgl_header(&cur, &hremain, &header))
+    if (! _unmarshal_pmgl_header(&cur, &hremain, block_len, &header))
         return NULL;
     end = page_buf + block_len - (header.free_space);
 
@@ -1218,7 +1247,7 @@ static Int32 _chm_find_in_PMGI(UChar *page_buf,
     /* figure out where to start and end */
     cur = page_buf;
     hremain = _CHM_PMGI_LEN;
-    if (! _unmarshal_pmgi_header(&cur, &hremain, &header))
+    if (! _unmarshal_pmgi_header(&cur, &hremain, block_len, &header))
         return -1;
     end = page_buf + block_len - (header.free_space);
 
@@ -1408,7 +1437,7 @@ static Int64 _chm_decompress_block(struct chmFile *h,
             UInt32 curBlockIdx = block - i;
 
             /* check if we most recently decompressed the previous block */
-            if (h->lzx_last_block != curBlockIdx)
+            if (h->lzx_last_block != (int)curBlockIdx)
             {
                 if ((curBlockIdx % h->reset_blkcount) == 0)
                 {
@@ -1545,6 +1574,12 @@ static Int64 _chm_decompress_region(struct chmFile *h,
 
     /* decompress some data */
     gotLen = _chm_decompress_block(h, nBlock, &ubuffer);
+    /* SumatraPDF: check return value */
+    if (gotLen == (UInt64)-1)
+    {
+        CHM_RELEASE_LOCK(h->lzx_mutex);
+        return 0;
+    }
     if (gotLen < nLen)
         nLen = gotLen;
     memcpy(buf, ubuffer+nOffset, (unsigned int)nLen);
@@ -1656,7 +1691,7 @@ int chm_enumerate(struct chmFile *h,
         /* figure out start and end for this page */
         cur = page_buf;
         lenRemain = _CHM_PMGL_LEN;
-        if (! _unmarshal_pmgl_header(&cur, &lenRemain, &header))
+        if (! _unmarshal_pmgl_header(&cur, &lenRemain, h->block_len, &header))
         {
             free(page_buf);
             return 0;
@@ -1805,7 +1840,7 @@ int chm_enumerate_dir(struct chmFile *h,
         /* figure out start and end for this page */
         cur = page_buf;
         lenRemain = _CHM_PMGL_LEN;
-        if (! _unmarshal_pmgl_header(&cur, &lenRemain, &header))
+        if (! _unmarshal_pmgl_header(&cur, &lenRemain, h->block_len, &header))
         {
             free(page_buf);
             return 0;
