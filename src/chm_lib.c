@@ -48,6 +48,8 @@
 #ifdef WIN32
 #include <windows.h>
 #include <malloc.h>
+#include <io.h>
+#include <fcntl.h>
 #define strcasecmp stricmp
 #define strncasecmp strnicmp
 #else
@@ -163,19 +165,19 @@ int64_t fd_reader(void* ctx_arg, void* buf, int64_t off, int64_t len) {
 bool win_reader_init(win_reader_ctx* ctx, const WCHAR* path) {
     ctx->fh = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
                           FILE_ATTRIBUTE_NORMAL, NULL);
-  return ctx->fh != INVALID_HANDLE_VALUE)
+    return ctx->fh != INVALID_HANDLE_VALUE;
 }
 
 void win_reader_close(win_reader_ctx* ctx) {
-    if (h != INVALID_HANDLE_VALUE) {
-        CloseHandle(h);
+    if (ctx->fh != INVALID_HANDLE_VALUE) {
+        CloseHandle(ctx->fh);
     }
 }
 
 int64_t win_reader(void* ctx_arg, void* buf, int64_t off, int64_t len) {
     win_reader_ctx* ctx = (win_reader_ctx*)ctx_arg;
     int64_t n = 0, oldOs = 0;
-    if (h->fd == INVALID_HANDLE_VALUE)
+    if (ctx->fh == INVALID_HANDLE_VALUE)
         return -1;
 
     /* NOTE: this might be better done with CreateFileMapping, et cetera... */
@@ -185,15 +187,15 @@ int64_t win_reader(void* ctx_arg, void* buf, int64_t off, int64_t len) {
 
     offsetLo = (unsigned int)(off & 0xffffffffL);
     offsetHi = (unsigned int)((off >> 32) & 0xffffffffL);
-    origOffsetLo = SetFilePointer(h->fh, 0, &origOffsetHi, FILE_CURRENT);
-    offsetLo = SetFilePointer(h->fh, offsetLo, &offsetHi, FILE_BEGIN);
+    origOffsetLo = SetFilePointer(ctx->fh, 0, &origOffsetHi, FILE_CURRENT);
+    offsetLo = SetFilePointer(ctx->fh, offsetLo, &offsetHi, FILE_BEGIN);
 
-    if (ReadFile(h->fh, buf, (DWORD)len, &actualLen, NULL) == TRUE)
+    if (ReadFile(ctx->fh, buf, (DWORD)len, &actualLen, NULL) == TRUE)
         n = actualLen;
     else
         n = -1;
 
-    SetFilePointer(h->fh, origOffsetLo, &origOffsetHi, FILE_BEGIN);
+    SetFilePointer(ctx->fh, origOffsetLo, &origOffsetHi, FILE_BEGIN);
     return n;
 }
 #endif
